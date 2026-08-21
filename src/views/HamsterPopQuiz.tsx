@@ -159,10 +159,34 @@ export function HamsterPopQuiz({ onViewChange, initialGame }: { onViewChange: (v
     setCurrentView(view);
   };
 
-  const handleStartLesson = (config: any) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const handleStartLesson = async (config: any) => {
     setLessonConfig(config);
-    const generated = generateDynamicQuestions(config);
-    setQuestions(generated);
+    setIsGenerating(true);
+    
+    try {
+      const res = await fetch('/api/generate-hamster-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: config.topic,
+          level: config.level,
+          types: config.selectedTypes,
+          freq: config.frequency,
+          videoUrl: videoUrl
+        })
+      });
+      const data = await res.json();
+      if (data.questions) {
+        setQuestions(data.questions);
+      } else {
+        setQuestions(generateDynamicQuestions(config));
+      }
+    } catch (e) {
+      console.error(e);
+      setQuestions(generateDynamicQuestions(config));
+    }
+    setIsGenerating(false);
     navigateTo('player');
   };
 
@@ -196,7 +220,7 @@ export function HamsterPopQuiz({ onViewChange, initialGame }: { onViewChange: (v
         {currentView === 'home' && <HomeView navigateTo={navigateTo} />}
         {currentView === 'create' && <CreateView navigateTo={navigateTo} videoUrl={videoUrl} setVideoUrl={setVideoUrl} />}
         {currentView === 'loading' && <LoadingAnalysisView navigateTo={navigateTo} />}
-        {currentView === 'config' && <ConfigView onStartLesson={handleStartLesson} />}
+        {currentView === 'config' && <ConfigView onStartLesson={handleStartLesson} isGenerating={isGenerating} />}
         {currentView === 'player' && (
           <PlayerView 
             config={lessonConfig}
@@ -276,7 +300,17 @@ function CreateView({ navigateTo, videoUrl, setVideoUrl }: any) {
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
-    if (videoUrl) navigateTo('loading');
+    if (videoUrl) {
+      let finalUrl = videoUrl.trim();
+      if (!/^https?:\/\//i.test(finalUrl)) {
+        finalUrl = 'https://' + finalUrl;
+      }
+      if (finalUrl.includes('youtube.com/shorts/')) {
+        finalUrl = finalUrl.replace('youtube.com/shorts/', 'youtube.com/watch?v=');
+      }
+      setVideoUrl(finalUrl);
+      navigateTo('loading');
+    }
   };
 
   return (
@@ -364,7 +398,7 @@ function LoadingAnalysisView({ navigateTo }: any) {
   );
 }
 
-function ConfigView({ onStartLesson }: any) {
+function ConfigView({ onStartLesson, isGenerating }: any) {
   const [level, setLevel] = useState('A2 Movers');
   const [selectedTypes, setSelectedTypes] = useState(['Multiple Choice', 'Vocabulary Meaning', 'Grammar Choice']);
   const [frequency, setFrequency] = useState('Smart Hamster Timing ✨');
@@ -479,9 +513,14 @@ function ConfigView({ onStartLesson }: any) {
       <div className="flex justify-center mb-20">
         <button 
           onClick={() => onStartLesson({ level, selectedTypes, frequency, topic, className, folder })}
-          className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-2xl font-black px-12 py-5 rounded-full shadow-[0_8px_0_#ca8a04] hover:shadow-[0_4px_0_#ca8a04] hover:translate-y-1 transition-all flex items-center gap-3"
+          disabled={isGenerating}
+          className="bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-yellow-900 text-2xl font-black px-12 py-5 rounded-full shadow-[0_8px_0_#ca8a04] hover:shadow-[0_4px_0_#ca8a04] hover:translate-y-1 transition-all flex items-center gap-3"
         >
-          <Play fill="currentColor" /> START LESSON NOW
+          {isGenerating ? (
+            <><Loader2 className="animate-spin" size={28} /> GENERATING...</>
+          ) : (
+            <><Play fill="currentColor" /> START LESSON NOW</>
+          )}
         </button>
       </div>
     </div>
@@ -504,8 +543,8 @@ function PlayerView({ config, questions, setQuestions, xp, setXp, streak, setStr
 
   // Playback is controlled by the playing prop in ReactPlayer
 
-  const handleTimeUpdate = (state: any) => {
-    const currentSeconds = state.playedSeconds;
+  const handleTimeUpdate = (e: any) => {
+    const currentSeconds = e?.currentTarget?.currentTime || e?.target?.currentTime || 0;
     setCurrentTime(currentSeconds);
     const duration = videoDuration || 120;
     
@@ -520,8 +559,12 @@ function PlayerView({ config, questions, setQuestions, xp, setXp, streak, setStr
     if (triggeredQuiz && isPlaying && !activeQuiz) {
       setIsPlaying(false); 
       setActiveQuiz(triggeredQuiz);
-      if (videoRef.current && typeof videoRef.current.seekTo === 'function') {
-        videoRef.current.seekTo(triggeredQuiz.timeTrigger, 'seconds');
+      if (videoRef.current) {
+        if (typeof videoRef.current.seekTo === 'function') {
+          videoRef.current.seekTo(triggeredQuiz.timeTrigger, 'seconds');
+        } else {
+          videoRef.current.currentTime = triggeredQuiz.timeTrigger;
+        }
       }
     }
   };
@@ -569,13 +612,16 @@ function PlayerView({ config, questions, setQuestions, xp, setXp, streak, setStr
           <div className={`absolute inset-0 w-full h-full transition-all duration-700 ${activeQuiz ? 'opacity-30 filter blur-md scale-105 pointer-events-none' : 'opacity-100 scale-100'}`}>
             <Player 
               ref={videoRef}
-              url={videoUrl || "https://media.w3.org/2010/05/sintel/trailer_hd.mp4"}
+              src={videoUrl || "https://media.w3.org/2010/05/sintel/trailer_hd.mp4"}
               width="100%"
               height="100%"
               playing={isPlaying && !activeQuiz}
-              onProgress={handleTimeUpdate}
+              onTimeUpdate={handleTimeUpdate}
               onEnded={() => setIsPlaying(false)}
-              onDuration={(duration: number) => setVideoDuration(duration)}
+              onDurationChange={(e: any) => {
+                const duration = e?.currentTarget?.duration || e?.target?.duration || 120;
+                setVideoDuration(duration);
+              }}
               controls={true}
               style={{ position: 'absolute', top: 0, left: 0 }}
             />
