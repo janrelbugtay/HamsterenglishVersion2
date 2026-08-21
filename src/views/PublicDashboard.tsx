@@ -1,0 +1,210 @@
+import React, { useEffect, useState } from "react";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { db } from "../lib/firebase";
+import { ViewState } from "../types";
+import { Gamepad2, Play, Search, Users, Sparkles, Filter } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+
+export function PublicDashboard({
+  onViewChange,
+}: {
+  onViewChange: (view: ViewState, data?: any) => void;
+}) {
+  const { user } = useAuth();
+  const [games, setGames] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<string>("all");
+
+  useEffect(() => {
+    const fetchPublicGames = async () => {
+      try {
+        const qGames = query(
+          collection(db, "mysteryBoxGames"),
+          where("isPublic", "==", true)
+        );
+        const gamesSnap = await getDocs(qGames);
+        
+        const publicGames: any[] = [];
+        gamesSnap.forEach((doc) => {
+          publicGames.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // Sort in client to avoid needing a composite index initially
+        publicGames.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          return dateB - dateA;
+        });
+
+        setGames(publicGames);
+      } catch (error) {
+        console.error("Error fetching public games:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPublicGames();
+  }, [user]);
+
+  const allGameTemplates = [
+    { id: "mystery-box", title: "Mystery Box", color: "text-orange-600" },
+    { id: "neon-chain", title: "Neon Chain", color: "text-cyan-600" },
+    { id: "bubble-pop", title: "Bubble Pop", color: "text-blue-600" },
+    { id: "flashcards-match", title: "Flashcards Match", color: "text-indigo-600" },
+    { id: "bubble-sentence-pro", title: "Bubble Island", color: "text-sky-600" },
+    { id: "yoga-quiz", title: "Yoga Quiz", color: "text-emerald-600" },
+    { id: "family-feud", title: "Family Feud", color: "text-yellow-600" },
+    { id: "sumo", title: "Sumo", color: "text-red-600" },
+    { id: "hamster-pop-quiz", title: "Hamster Pop", color: "text-pink-600" },
+    { id: "student-race", title: "Student Race", color: "text-violet-600" },
+    { id: "letter-lock", title: "Letter Lock", color: "text-blue-600" }
+  ];
+
+  const getTemplateInfo = (templateId: string) => {
+    return allGameTemplates.find(t => t.id === templateId) || { title: "Unknown Game", color: "text-slate-600" };
+  };
+
+  const filteredGames = games.filter(game => {
+    const matchesSearch = 
+      (game.topic || game.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (game.creatorName || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const matchesType = filterType === "all" || game.gameType === filterType;
+    
+    return matchesSearch && matchesType;
+  });
+
+  const availableTypes = Array.from(new Set(games.map(g => g.gameType).filter(Boolean)));
+
+  return (
+    <div className="max-w-6xl mx-auto py-8 px-4 flex flex-col gap-8">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-brand-purple to-indigo-600 p-8 rounded-[32px] shadow-lg text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-brand-yellow/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2"></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black mb-3 flex items-center gap-3">
+              <Users className="w-10 h-10 text-brand-yellow" />
+              Community Hub
+            </h1>
+            <p className="text-indigo-100 text-lg max-w-2xl font-medium leading-relaxed">
+              Discover and play amazing educational games created by teachers from around the world.
+            </p>
+          </div>
+          
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 shrink-0">
+             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+               <Gamepad2 size={24} className="text-white" />
+             </div>
+             <div>
+               <div className="text-3xl font-black">{games.length}</div>
+               <div className="text-indigo-100 text-sm font-semibold uppercase tracking-wider">Public Games</div>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 items-center bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700">
+        <div className="relative w-full md:flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search topics, titles, or creators..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-purple/50 focus:border-brand-purple transition-all font-medium"
+          />
+        </div>
+        
+        <div className="relative w-full md:w-64 shrink-0 flex items-center">
+          <Filter className="absolute left-4 text-slate-400" size={18} />
+          <select 
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="w-full pl-11 pr-10 py-3 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-purple/50 appearance-none font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+          >
+            <option value="all">All Game Types</option>
+            {availableTypes.map(type => {
+              const info = getTemplateInfo(type);
+              return <option key={type} value={type}>{info.title}</option>
+            })}
+          </select>
+        </div>
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-brand-purple"></div>
+          <p className="mt-4 text-slate-500 font-semibold">Loading community games...</p>
+        </div>
+      ) : filteredGames.length === 0 ? (
+        <div className="bg-white dark:bg-slate-800 rounded-[24px] p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-700">
+          <div className="w-20 h-20 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Search className="w-10 h-10 text-slate-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-2">No games found</h3>
+          <p className="text-slate-500 max-w-md mx-auto">
+            Try adjusting your search terms or filters to find what you're looking for.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredGames.map((game) => {
+            const info = getTemplateInfo(game.gameType);
+            return (
+              <div
+                key={game.id}
+                className="group bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border-2 border-slate-100 dark:border-slate-700 flex flex-col cursor-pointer"
+                onClick={() => onViewChange(game.gameType as ViewState, game)}
+              >
+                <div className="aspect-[4/3] bg-slate-50 dark:bg-slate-900 flex items-center justify-center relative overflow-hidden border-b-2 border-slate-100 dark:border-slate-700">
+                   <div className="absolute inset-0 bg-gradient-to-br from-brand-purple/5 to-transparent"></div>
+                   <Gamepad2 size={64} className={`opacity-20 ${info.color}`} />
+                   
+                   <div className="absolute bottom-3 left-3 flex gap-2">
+                     <span className="px-3 py-1 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full text-xs font-bold shadow-sm">
+                       {info.title}
+                     </span>
+                     {game.classLevel && (
+                       <span className="px-3 py-1 bg-brand-yellow/90 backdrop-blur-sm rounded-full text-xs font-bold text-slate-900 shadow-sm">
+                         {game.classLevel}
+                       </span>
+                     )}
+                   </div>
+                   
+                   {/* Play overlay */}
+                   <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+                     <div className="w-16 h-16 bg-brand-purple text-white rounded-full flex items-center justify-center transform scale-50 group-hover:scale-100 transition-transform duration-300 shadow-xl">
+                       <Play className="ml-1" size={28} />
+                     </div>
+                   </div>
+                </div>
+
+                <div className="p-5 flex-1 flex flex-col">
+                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 mb-1 line-clamp-1">
+                    {game.topic || game.name || "Untitled Game"}
+                  </h3>
+                  
+                  <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-700/50">
+                    <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                       <Users size={12} className="text-slate-500" />
+                    </div>
+                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 line-clamp-1">
+                      {game.creatorName || "Anonymous Teacher"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
