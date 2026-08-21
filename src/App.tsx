@@ -52,7 +52,8 @@ export default function App() {
   };
 
   const renderView = () => {
-    if (!user && currentView !== "home") {
+    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo"];
+    if (!user && !publicViews.includes(currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-4">
           <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-700 text-center max-w-md w-full">
@@ -63,7 +64,7 @@ export default function App() {
               Login Required
             </h2>
             <p className="text-slate-500 dark:text-slate-400 mb-8">
-              Please sign in with Google to access games and other features.
+              Please sign in to access your saved games and dashboards.
             </p>
             
             {authError && (
@@ -79,7 +80,7 @@ export default function App() {
               disabled={isAuthenticating}
               className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white font-semibold py-3 px-6 rounded-xl transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isAuthenticating ? "Signing In..." : "Sign In with Google"}
+              {isAuthenticating ? "Signing In..." : "Sign In to Continue"}
             </button>
           </div>
         </div>
