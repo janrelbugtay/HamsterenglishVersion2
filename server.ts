@@ -237,6 +237,27 @@ async function startServer() {
     }
   });
 
+  // Giphy Search Endpoint
+  app.get("/api/giphy-search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) return res.status(400).json({ error: "Query is required" });
+      
+      const apiKey = process.env.GIPHY_API_KEY || 'dc6zaTOxFJmzC'; // Fallback to public beta key
+      const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=20&rating=g`);
+      
+      if (!response.ok) {
+        throw new Error(`Giphy API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (err: any) {
+      console.error("Giphy error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

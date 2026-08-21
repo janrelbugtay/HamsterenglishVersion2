@@ -89,6 +89,9 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
       return;
     }
 
+    // Go to games view instantly for a snappy feel
+    onViewChange("games");
+
     try {
       const gameToSave = JSON.parse(JSON.stringify({
         name: gameData.title || "",
@@ -109,10 +112,9 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
           createdAt: new Date().toISOString(),
         });
       }
-      onViewChange("games");
     } catch (error) {
       console.error("Error saving game:", error);
-      alert("Error saving game.");
+      // alert("Error saving game.");
     }
   };
 
@@ -271,6 +273,24 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
     });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (index === sentences.length - 1) {
+        // If it's the last sentence, add a new one and focus it
+        addSentence();
+        setTimeout(() => {
+          const nextInput = document.getElementById(`sentence-input-${index + 1}`);
+          nextInput?.focus();
+        }, 50); // slight delay to allow React to render the new input
+      } else {
+        // Just focus the next input
+        const nextInput = document.getElementById(`sentence-input-${index + 1}`);
+        nextInput?.focus();
+      }
+    }
+  };
+
   const handleSave = () => {
     const generatedTitle = "Bubble Island Game";
 
@@ -366,9 +386,11 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
                   {index + 1}
                 </div>
                 <input 
+                  id={`sentence-input-${index}`}
                   type="text"
                   value={s.text}
                   onChange={(e) => updateSentence(s.id, 'text', e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, index)}
                   placeholder="Type your sentence here..."
                   className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 text-slate-800 dark:text-white font-medium"
                 />

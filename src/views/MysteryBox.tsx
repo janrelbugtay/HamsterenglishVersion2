@@ -55,6 +55,9 @@ export function MysteryBox({
           return;
         }
         setIsSaving(true);
+        // Optimistic UI update: instantly go to the games view
+        onViewChange("games");
+        
         try {
           // Resolve folderId
           const folderName = (gameData.folder || "").trim();
@@ -100,18 +103,15 @@ export function MysteryBox({
 
           if (initialGame?.id) {
             await updateDoc(doc(db, "mysteryBoxGames", initialGame.id), gameToSave);
-            alert("Game updated successfully!");
           } else {
             await addDoc(collection(db, "mysteryBoxGames"), {
               ...gameToSave,
               createdAt: new Date().toISOString(),
             });
-            alert("Game saved successfully!");
           }
-          onViewChange("games");
         } catch (error: any) {
           console.error("Error saving game:", error);
-          alert("Error saving game: " + error?.message);
+          // alert("Error saving game: " + error?.message);
         } finally {
           setIsSaving(false);
         }

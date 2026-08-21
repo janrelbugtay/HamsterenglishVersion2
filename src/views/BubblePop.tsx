@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
-import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder } from "lucide-react";
+import { MediaPickerModal } from "../components/MediaPickerModal";
+import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon } from "lucide-react";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -87,6 +88,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       return;
     }
 
+    // Go to games view instantly for a snappy feel
+    onViewChange("games");
+
     try {
       const gameToSave = JSON.parse(JSON.stringify({
         name: quiz.title || "",
@@ -107,10 +111,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
           createdAt: new Date().toISOString(),
         });
       }
-      onViewChange("games");
     } catch (error) {
       console.error("Error saving game:", error);
-      alert("Error saving game.");
+      // alert("Error saving game.");
     }
   };
 
@@ -1070,49 +1073,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
   const [classLevel, setClassLevel] = useState(quiz.classLevel || "");
   const [questions, setQuestions] = useState<Question[]>(quiz.questions);
   const [errorMsg, setErrorMsg] = useState("");
-  const [isGeneratingImage, setIsGeneratingImage] = useState<string | null>(null);
-
-  const generateImageForOption = async (qId: number | string, optIndex: number, promptText: string) => {
-    if (!promptText.trim()) {
-        setErrorMsg("Enter text in the option first to generate an emoji.");
-        setTimeout(() => setErrorMsg(""), 3000);
-        return;
-    }
-    
-    setIsGeneratingImage(`${qId}-${optIndex}`);
-    try {
-        const res = await fetch("/api/generate-emoji", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: promptText })
-        });
-        
-        if (!res.ok) {
-            let errorDetails = res.statusText;
-            try {
-                const errData = await res.json();
-                errorDetails = errData.error || res.statusText;
-                if (typeof errorDetails === 'string' && errorDetails.includes('exceeded your current quota')) {
-                  errorDetails = "Free tier quota exceeded. Please wait a minute and try again.";
-                }
-            } catch (e) {}
-            throw new Error(`Failed to generate emoji: ${errorDetails}`);
-        }
-        
-        const data = await res.json();
-        if (data.emoji) {
-            updateOption(qId, optIndex, `${data.emoji} ${promptText}`);
-        } else {
-            throw new Error("No emoji returned");
-        }
-    } catch (err: any) {
-        console.error(err);
-        setErrorMsg(err.message || "Failed to generate emoji");
-        setTimeout(() => setErrorMsg(""), 3000);
-    } finally {
-        setIsGeneratingImage(null);
-    }
-  };
+  const [activeGiphyInput, setActiveGiphyInput] = useState<{ qId: number | string, optIndex: number } | null>(null);
 
   const addQuestion = () => {
     setQuestions([...questions, { id: Date.now(), text: '', options: ['', '', '', ''], answerIndex: 0 }]);
@@ -1161,6 +1122,22 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
       }
       return prev;
     });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (index === questions.length - 1) {
+        addQuestion();
+        setTimeout(() => {
+          const nextInput = document.getElementById(`question-input-${index + 1}`);
+          nextInput?.focus();
+        }, 50);
+      } else {
+        const nextInput = document.getElementById(`question-input-${index + 1}`);
+        nextInput?.focus();
+      }
+    }
   };
 
   const handleSave = () => {
@@ -1258,9 +1235,11 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
                   {index + 1}
                 </div>
                 <input 
+                  id={`question-input-${index}`}
                   type="text"
                   value={q.text}
                   onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, index)}
                   placeholder="Type your question here..."
                   className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-slate-800 dark:text-white font-medium"
                 />
@@ -1279,7 +1258,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
                     {opt.startsWith('data:image') || opt.startsWith('http') ? (
                       <div className="flex-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-1.5 pr-3">
                         <img src={opt} alt="Option" className="w-8 h-8 rounded object-cover" />
-                        <span className="text-xs text-slate-400 flex-1 truncate">Image Generated</span>
+                        <span className="text-xs text-slate-400 flex-1 truncate">Image/GIF</span>
                         <button onClick={() => updateOption(q.id, optIndex, '')} className="text-red-400 hover:text-red-300 cursor-pointer p-1">
                           <X size={14} />
                         </button>
@@ -1294,16 +1273,11 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
                           className={`flex-1 min-w-0 bg-slate-50 dark:bg-slate-900 border ${q.answerIndex === optIndex ? 'border-blue-500/50 bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300'} rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-sm font-medium`}
                         />
                         <button 
-                          onClick={() => generateImageForOption(q.id, optIndex, opt)}
-                          disabled={isGeneratingImage === `${q.id}-${optIndex}`}
-                          className="bg-purple-500/20 text-purple-400 p-2 rounded-lg hover:bg-purple-500 hover:text-white transition-colors disabled:opacity-50 shrink-0 cursor-pointer flex items-center justify-center"
-                          title="Generate Emoji"
+                          onClick={() => setActiveGiphyInput({ qId: q.id, optIndex })}
+                          className="bg-purple-500/20 text-purple-400 p-2 rounded-lg hover:bg-purple-500 hover:text-white transition-colors shrink-0 cursor-pointer flex items-center justify-center"
+                          title="Search Giphy"
                         >
-                          {isGeneratingImage === `${q.id}-${optIndex}` ? (
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                          ) : (
-                            <Sparkles size={16} />
-                          )}
+                          <ImageIcon size={16} />
                         </button>
                       </div>
                     )}
@@ -1326,6 +1300,17 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
         </div>
       </div>
       </div>
+      
+      <MediaPickerModal 
+        isOpen={activeGiphyInput !== null}
+        onClose={() => setActiveGiphyInput(null)}
+        onSelect={(url) => {
+          if (activeGiphyInput) {
+            updateOption(activeGiphyInput.qId, activeGiphyInput.optIndex, url);
+            setActiveGiphyInput(null);
+          }
+        }}
+      />
     </div>
   );
 }
