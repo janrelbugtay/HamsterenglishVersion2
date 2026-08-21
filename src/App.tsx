@@ -29,12 +29,14 @@ import { useAuth } from "./contexts/AuthContext";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { AlertTriangle } from "lucide-react";
+import { AuthSliderModal } from "./components/AuthSliderModal";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>("home");
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, loading, isAuthenticating, signInWithGoogle, authError } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const { user, loading, isAuthenticating, authError } = useAuth();
   
   const isAdmin = Boolean(user && !user.isAnonymous && user.email?.toLowerCase().trim() === "janrelbugtay03@gmail.com");
 
@@ -76,7 +78,7 @@ export default function App() {
             )}
             
             <button
-              onClick={signInWithGoogle}
+              onClick={() => setIsAuthModalOpen(true)}
               disabled={isAuthenticating}
               className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white font-semibold py-3 px-6 rounded-xl transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -151,6 +153,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
+      <AuthSliderModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <Navigation 
         currentView={currentView} 
         onViewChange={handleViewChange} 
@@ -161,6 +164,7 @@ export default function App() {
         <Header 
           onViewChange={handleViewChange} 
           setIsMobileMenuOpen={setIsMobileMenuOpen}
+          openAuthModal={() => setIsAuthModalOpen(true)}
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
           {renderView()}

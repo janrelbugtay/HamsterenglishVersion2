@@ -111,11 +111,13 @@ export function Navigation({ currentView, onViewChange, isMobileMenuOpen, setIsM
 export function Header({
   onViewChange,
   setIsMobileMenuOpen,
+  openAuthModal,
 }: {
   onViewChange?: (view: ViewState) => void;
   setIsMobileMenuOpen: (open: boolean) => void;
+  openAuthModal?: () => void;
 }) {
-  const { user, signInWithGoogle, linkWithGoogle, logout, loading, isAuthenticating } = useAuth();
+  const { user, linkWithGoogle, logout, loading, isAuthenticating } = useAuth();
   const [showDropdown, setShowDropdown] = React.useState(false);
   const [isDarkMode, setIsDarkMode] = React.useState(() => document.documentElement.classList.contains('dark'));
   
@@ -210,12 +212,12 @@ export function Header({
                       {user.isAnonymous && (
                         <button
                           onClick={() => {
-                            linkWithGoogle();
+                            if (openAuthModal) openAuthModal();
                             setShowDropdown(false);
                           }}
                           className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-brand-purple transition-colors flex items-center justify-between"
                         >
-                          Connect Google
+                          Sign In / Register
                         </button>
                       )}
                       {isAdmin && (
@@ -244,7 +246,7 @@ export function Header({
             </div>
           ) : (
             <button
-              onClick={signInWithGoogle}
+              onClick={openAuthModal}
               disabled={isAuthenticating}
               className="bg-brand-purple hover:bg-brand-purple/90 text-white font-semibold py-1.5 px-3 md:px-4 rounded-full text-sm transition-colors shadow-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             >

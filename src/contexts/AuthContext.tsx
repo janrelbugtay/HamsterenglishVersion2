@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, linkWithPopup, GoogleAuthProvider, signInAnonymously } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, linkWithPopup, GoogleAuthProvider, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 
@@ -10,6 +10,8 @@ interface AuthContextType {
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
   linkWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -157,6 +159,45 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const signInWithEmail = async (email: string, pass: string) => {
+    setIsAuthenticating(true);
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error: any) {
+      setAuthError(`Sign in failed: ${error.message}`);
+      throw error;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const signUpWithEmail = async (email: string, pass: string, name: string) => {
+    setIsAuthenticating(true);
+    setAuthError(null);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, { displayName: name });
+        // Force refresh user doc in firestore
+        const userRef = doc(db, 'users', userCredential.user.uid);
+        await setDoc(userRef, {
+          uid: userCredential.user.uid,
+          email: userCredential.user.email || email,
+          displayName: name,
+          photoURL: null,
+          isAnonymous: false,
+          lastLoginAt: serverTimestamp(),
+        }, { merge: true });
+      }
+    } catch (error: any) {
+      setAuthError(`Sign up failed: ${error.message}`);
+      throw error;
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -166,7 +207,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, linkWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, linkWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );
