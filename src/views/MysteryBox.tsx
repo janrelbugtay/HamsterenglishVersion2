@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { ArrowLeft, Save, X } from "lucide-react";
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
+import { MediaPickerModal } from "../components/MediaPickerModal";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../lib/firebase";
 import { addDoc, collection, doc, updateDoc, getDocs, query, where } from "firebase/firestore";
@@ -18,6 +19,8 @@ export function MysteryBox({
   const [isSaving, setIsSaving] = useState(false);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
+  const [mediaTarget, setMediaTarget] = useState<{ qIdx: number, oIdx: number } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -41,9 +44,12 @@ export function MysteryBox({
     }
   }, [folders, iframeLoaded]);
 
-
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === "OPEN_MEDIA_PICKER") {
+        setMediaTarget(event.data.data);
+        setMediaPickerOpen(true);
+      }
       if (event.data?.type === "SAVE_MYSTERY_BOX") {
         if (!user) {
           alert("You must be logged in to save games.");
@@ -62,7 +68,6 @@ export function MysteryBox({
           // Resolve folderId
           const folderName = (gameData.folder || "").trim();
           let folderId = null;
-
           if (folderName) {
             const qFolders = query(
               collection(db, "gameFolders"),
@@ -122,7 +127,6 @@ export function MysteryBox({
     return () => window.removeEventListener("message", handleMessage);
   }, [user, initialGame, onViewChange]);
 
-
   useEffect(() => {
     // If we have an initial game, send it to the iframe once it's loaded
     const handleIframeLoad = () => {
@@ -161,6 +165,7 @@ export function MysteryBox({
         </h1>
         <div className="ml-auto flex items-center"><FullscreenButton targetId="game-container" /></div>
       </div>
+      
       <iframe
         ref={iframeRef}
         src="/mystery-box.html"
@@ -168,6 +173,27 @@ export function MysteryBox({
         title="Mystery Box Game"
       />
 
+      <MediaPickerModal 
+        isOpen={mediaPickerOpen} 
+        onClose={() => {
+          setMediaPickerOpen(false);
+          setMediaTarget(null);
+        }} 
+        onSelect={(url) => {
+          if (mediaTarget && iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage({
+              type: "MEDIA_PICKED",
+              data: {
+                qIdx: mediaTarget.qIdx,
+                oIdx: mediaTarget.oIdx,
+                url
+              }
+            }, "*");
+          }
+          setMediaPickerOpen(false);
+          setMediaTarget(null);
+        }} 
+      />
     </div>
   );
 }
