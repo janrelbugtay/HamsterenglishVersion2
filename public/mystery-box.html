@@ -416,6 +416,8 @@
       let openedBoxes = [];
 
       let activeBox = null;
+      let selectedBoxAnimation = null;
+      let isModalJustOpened = false;
       let isSettingsOpen = false;
       let isAnswerRevealed = false;
       let selectedOptionIndex = null;
@@ -536,20 +538,31 @@
 
       const handleBoxClick = (letter) => {
         if (openedBoxes.includes(letter)) return;
+        if (selectedBoxAnimation) return; // Prevent multiple clicks
+        
         playSound("click", isMuted);
-        activeBox = customQuestions.find((q) => q.letter === letter);
-        isAnswerRevealed = false;
-        selectedOptionIndex = null;
-        currentOutcome = null;
-        modalStep = "question";
-        targetTeamIdx = null;
+        selectedBoxAnimation = letter;
         renderApp();
+        
+        setTimeout(() => {
+          playSound("suspense", isMuted);
+          activeBox = customQuestions.find((q) => q.letter === letter);
+          isAnswerRevealed = false;
+          selectedOptionIndex = null;
+          currentOutcome = null;
+          modalStep = "question";
+          targetTeamIdx = null;
+          selectedBoxAnimation = null;
+          isModalJustOpened = true;
+          renderApp();
+        }, 800);
       };
 
       const handleOptionSelect = (index) => {
         if (!isAnswerRevealed) {
           playSound("click", isMuted);
           selectedOptionIndex = index;
+          isModalJustOpened = false;
           renderApp();
         }
       };
@@ -558,22 +571,39 @@
         playSound("suspense", isMuted);
         playSound("reveal", isMuted);
         isAnswerRevealed = true;
+        isModalJustOpened = false;
         renderApp();
       };
 
       const handleIncorrect = () => {
         playSound("incorrect", isMuted);
-        openedBoxes.push(activeBox.letter);
-        activeBox = null;
-        toggleTeam();
+        isModalJustOpened = false;
+        
+        // Show incorrect state briefly
+        modalStep = "incorrect_transition";
         renderApp();
-        checkGameOver();
+        
+        setTimeout(() => {
+          openedBoxes.push(activeBox.letter);
+          activeBox = null;
+          toggleTeam();
+          renderApp();
+          checkGameOver();
+        }, 1500);
       };
 
       const handleCorrect = () => {
-        playSound("click", isMuted);
-        modalStep = "decision";
+        playSound("correct", isMuted);
+        isModalJustOpened = false;
+        
+        // Show correct state briefly
+        modalStep = "correct_transition";
         renderApp();
+        
+        setTimeout(() => {
+          modalStep = "decision";
+          renderApp();
+        }, 1500);
       };
 
       const handleDecision = (choiceTargetIdx) => {
@@ -930,16 +960,23 @@
         let gridHtml = customQuestions
           .map((box) => {
             const isOpened = openedBoxes.includes(box.letter);
+            const isAnimating = selectedBoxAnimation === box.letter;
+            const otherIsAnimating = selectedBoxAnimation && selectedBoxAnimation !== box.letter;
+            
             return `
           <button
             onclick="handleBoxClick('${box.letter}')"
             onmouseenter="playSound('hover', isMuted)"
-            ${isOpened ? "disabled" : ""}
-            class="relative overflow-hidden group aspect-square rounded-[2rem] flex flex-col items-center justify-center text-2xl sm:text-3xl md:text-4xl font-black shadow-xl transition-all duration-300
+            ${isOpened || selectedBoxAnimation ? "disabled" : ""}
+            class="relative overflow-hidden group aspect-square rounded-[2rem] flex flex-col items-center justify-center text-2xl sm:text-3xl md:text-4xl font-black shadow-xl transition-all duration-700
               ${
                 isOpened
                   ? "bg-white/40 text-slate-400/50 cursor-not-allowed border-2 border-white/50 shadow-inner scale-95"
-                  : "${theme.box} animate-box-glow text-white hover:-translate-y-2 hover:shadow-2xl ${theme.boxHover} border-4 active:scale-95"
+                  : isAnimating 
+                    ? "${theme.box} text-white border-4 scale-[1.5] z-50 shadow-[0_0_100px_rgba(255,255,255,0.8)] opacity-100 rotate-[360deg]"
+                    : otherIsAnimating
+                      ? "${theme.box} text-white opacity-20 blur-sm scale-90 border-4"
+                      : "${theme.box} animate-box-glow text-white hover:-translate-y-2 hover:shadow-2xl ${theme.boxHover} border-4 active:scale-95"
               }
             "
           >
@@ -1034,6 +1071,24 @@
             </div>
             ${controlsHtml}
           `;
+          } else if (modalStep === "correct_transition") {
+            modalInner = `
+              <div class="flex flex-col items-center justify-center p-12 py-24 animate-in zoom-in duration-500 text-green-500">
+                <div class="w-32 h-32 bg-green-100 rounded-full flex items-center justify-center mb-8 shadow-inner animate-bounce">
+                  <i data-lucide="check" class="w-20 h-20 text-green-500" stroke-width="3"></i>
+                </div>
+                <h3 class="text-6xl md:text-8xl font-black drop-shadow-sm uppercase tracking-widest">CORRECT!</h3>
+              </div>
+            `;
+          } else if (modalStep === "incorrect_transition") {
+            modalInner = `
+              <div class="flex flex-col items-center justify-center p-12 py-24 animate-in zoom-in duration-500 text-red-500">
+                <div class="w-32 h-32 bg-red-100 rounded-full flex items-center justify-center mb-8 shadow-inner animate-shake">
+                  <i data-lucide="x" class="w-20 h-20 text-red-500" stroke-width="3"></i>
+                </div>
+                <h3 class="text-6xl md:text-8xl font-black drop-shadow-sm uppercase tracking-widest">INCORRECT</h3>
+              </div>
+            `;
           } else if (modalStep === "decision") {
             let giveButtonsHtml = "";
             if (teams.length === 2) {
@@ -1159,9 +1214,12 @@
           `;
           }
 
+          const backdropAnimation = isModalJustOpened ? "animate-in fade-in duration-500" : "";
+          const popupAnimation = isModalJustOpened ? "animate-in zoom-in-75 slide-in-from-bottom-10 duration-500 ease-out" : "";
+
           modalHtml = `
-          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto">
-            <div class="bg-white border-[6px] ${theme.modalBorder} rounded-[3rem] p-8 md:p-12 max-w-[90vw] xl:max-w-7xl w-full shadow-2xl relative animate-in zoom-in-95 duration-300 my-auto">
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-lg overflow-y-auto ${backdropAnimation}">
+            <div class="bg-white border-[6px] ${theme.modalBorder} rounded-[3rem] p-8 md:p-12 max-w-[90vw] xl:max-w-7xl w-full shadow-2xl relative my-auto ${popupAnimation}">
               <div class="absolute -top-12 left-1/2 -translate-x-1/2">
                 <div class="bg-gradient-to-br from-yellow-400 to-orange-500 text-white w-24 h-24 rounded-full flex items-center justify-center text-5xl font-black shadow-lg border-[6px] border-white">
                   ${activeBox.letter}

@@ -49,21 +49,21 @@ export function PublicDashboard({
   }, [user]);
 
   const allGameTemplates = [
-    { id: "mystery-box", title: "Mystery Box", color: "text-orange-600" },
-    { id: "neon-chain", title: "Neon Chain", color: "text-cyan-600" },
-    { id: "bubble-pop", title: "Bubble Pop", color: "text-blue-600" },
-    { id: "flashcards-match", title: "Flashcards Match", color: "text-indigo-600" },
-    { id: "bubble-sentence-pro", title: "Bubble Island", color: "text-sky-600" },
-    { id: "yoga-quiz", title: "Yoga Quiz", color: "text-emerald-600" },
-    { id: "family-feud", title: "Family Feud", color: "text-yellow-600" },
-    { id: "sumo", title: "Sumo", color: "text-red-600" },
-    { id: "hamster-pop-quiz", title: "Hamster Pop", color: "text-pink-600" },
-    { id: "student-race", title: "Student Race", color: "text-violet-600" },
-    { id: "letter-lock", title: "Letter Lock", color: "text-blue-600" }
+    { id: "mystery-box", title: "Mystery Box", color: "text-orange-600", icon: "https://drive.google.com/thumbnail?id=1ugM0rhtk40XdbSDrdDJja5QpLNkWebQn&sz=w1000" },
+    { id: "neon-chain", title: "Neon Chain", color: "text-cyan-600", icon: "https://drive.google.com/thumbnail?id=1kovfYZSlp6X8HTqQ9OF_gSpf3wgJgNYG&sz=w1000" },
+    { id: "bubble-pop", title: "Bubble Pop", color: "text-blue-600", icon: "https://drive.google.com/thumbnail?id=1AHwLQ7lCIsKt9fzMlWAJWMnRCfFE4mE-&sz=w1000" },
+    { id: "flashcards-match", title: "Flashcards Match", color: "text-indigo-600", icon: "https://drive.google.com/thumbnail?id=1UtaZtVX0onrqj3VorxedOxy1iVXdFAHk&sz=w1000" },
+    { id: "bubble-sentence-pro", title: "Bubble Island", color: "text-sky-600", icon: "https://drive.google.com/thumbnail?id=136UAXGhVDr4ZhJd3bRABHDKp40RJIQSJ&sz=w1000" },
+    { id: "yoga-quiz", title: "Yoga Quiz", color: "text-emerald-600", icon: "https://drive.google.com/thumbnail?id=16viKskpD4hXygTg-0UaGSjfrWibNoqeQ&sz=w1000" },
+    { id: "family-feud", title: "Family Feud", color: "text-yellow-600", icon: "https://drive.google.com/thumbnail?id=1DDWdERo9zS6SEbpXA7J8FSh__1CNqxZN&sz=w1000" },
+    { id: "sumo", title: "Sumo", color: "text-red-600", icon: "https://drive.google.com/thumbnail?id=19zB6Kpor6pry7TV3XvX3eIZdxpd3ys40&sz=w1000" },
+    { id: "hamster-pop-quiz", title: "Hamster Pop", color: "text-pink-600", icon: "https://images.unsplash.com/photo-1425082661705-1834bfd08711?q=80&w=1000&auto=format&fit=crop" },
+    { id: "student-race", title: "Student Race", color: "text-violet-600", icon: "https://images.unsplash.com/photo-1541604193435-22287d32c2c2?q=80&w=1000&auto=format&fit=crop" },
+    { id: "letter-lock", title: "Letter Lock", color: "text-blue-600", icon: "https://ui-avatars.com/api/?name=Letter+Lock&background=38bdf8&color=fff&size=512" }
   ];
 
   const getTemplateInfo = (templateId: string) => {
-    return allGameTemplates.find(t => t.id === templateId) || { title: "Unknown Game", color: "text-slate-600" };
+    return allGameTemplates.find(t => t.id === templateId) || { title: "Unknown Game", color: "text-slate-600", icon: "" };
   };
 
   const filteredGames = games.filter(game => {
@@ -164,22 +164,15 @@ export function PublicDashboard({
                 onClick={() => onViewChange(game.gameType as ViewState, game)}
               >
                 <div className="aspect-[4/3] bg-slate-50 dark:bg-slate-900 flex items-center justify-center relative overflow-hidden border-b-2 border-slate-100 dark:border-slate-700">
-                   <div className="absolute inset-0 bg-gradient-to-br from-brand-purple/5 to-transparent"></div>
-                   <Gamepad2 size={64} className={`opacity-20 ${info.color}`} />
-                   
-                   <div className="absolute bottom-3 left-3 flex gap-2">
-                     <span className="px-3 py-1 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-full text-xs font-bold shadow-sm">
-                       {info.title}
-                     </span>
-                     {game.classLevel && (
-                       <span className="px-3 py-1 bg-brand-yellow/90 backdrop-blur-sm rounded-full text-xs font-bold text-slate-900 shadow-sm">
-                         {game.classLevel}
-                       </span>
-                     )}
-                   </div>
+                   <div className="absolute inset-0 bg-gradient-to-br from-brand-purple/5 to-transparent z-10"></div>
+                   {info.icon && (info.icon.startsWith("http") || info.icon.startsWith("/")) ? (
+                     <img src={info.icon} referrerPolicy="no-referrer" alt={info.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                   ) : (
+                     <Gamepad2 size={64} className={`opacity-20 ${info.color} relative z-10`} />
+                   )}
                    
                    {/* Play overlay */}
-                   <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300">
+                   <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 z-30">
                      <div className="w-16 h-16 bg-brand-purple text-white rounded-full flex items-center justify-center transform scale-50 group-hover:scale-100 transition-transform duration-300 shadow-xl">
                        <Play className="ml-1" size={28} />
                      </div>
@@ -187,9 +180,16 @@ export function PublicDashboard({
                 </div>
 
                 <div className="p-5 flex-1 flex flex-col">
-                  <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 mb-1 line-clamp-1">
-                    {game.topic || game.name || "Untitled Game"}
-                  </h3>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100 line-clamp-1">
+                      {game.topic || game.name || "Untitled Game"}
+                    </h3>
+                    {game.classLevel && (
+                      <span className="px-2 py-1 bg-brand-yellow/20 text-yellow-800 dark:text-yellow-500 rounded-md text-xs font-bold whitespace-nowrap shrink-0">
+                        {game.classLevel}
+                      </span>
+                    )}
+                  </div>
                   
                   <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-700/50">
                     <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
