@@ -1281,6 +1281,9 @@ window.onunhandledrejection = function(event) {
                 
                 let clean = s.text.replace(/[.,!?]/g, '');
                 this.words = clean.split(' ').filter(w=>w.length>0);
+                if (this.words.length > 0) {
+                    this.words[0] = this.words[0].charAt(0).toUpperCase() + this.words[0].slice(1);
+                }
                 
                 // UI Setup
                 
@@ -1358,9 +1361,9 @@ window.onunhandledrejection = function(event) {
                 this.words.forEach((w,i) => {
                     const s = document.createElement('div');
                     s.className = 'word-slot shadow-inner relative';
-                    s.dataset.w = w.toLowerCase();
+                    s.dataset.w = w;
                     con.appendChild(s);
-                    this.slots.push({ el: s, w: w.toLowerCase(), filled: false });
+                    this.slots.push({ el: s, w: w, filled: false });
                 });
             },
             createBubbles() {
@@ -1461,7 +1464,7 @@ window.onunhandledrejection = function(event) {
                         if (clickedB.isClick) {
                             const nextI = this.slots.findIndex(s => !s.filled);
                             if (nextI !== -1) {
-                                if (this.slots[nextI].w === clickedB.wordText.toLowerCase()) {
+                                if (this.slots[nextI].w === clickedB.wordText) {
                                     this.correct(clickedB, this.slots[nextI]);
                                 } else {
                                     this.wrong(clickedB, this.slots[nextI]);
@@ -1475,7 +1478,7 @@ window.onunhandledrejection = function(event) {
             },
             checkDrop(b, cx, cy) {
                 const pad = 30; // Generous hit area
-                const wordText = b.wordText.toLowerCase();
+                const wordText = b.wordText;
                 
                 // First check if they dropped it on ANY empty slot
                 for (let slot of this.slots) {
@@ -1667,7 +1670,7 @@ window.onunhandledrejection = function(event) {
             showHint() {
                 const n = this.slots.find(s=>!s.filled);
                 if(n) {
-                    const b = this.bubbles.find(b => !b.snapped && b.wordText.toLowerCase() === n.w);
+                    const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
                     if(b) {
                         b.shakeTime = 800;
                         b.el.style.borderColor = '#fbbf24';
@@ -1686,7 +1689,7 @@ window.onunhandledrejection = function(event) {
             showAnswer() {
                 const n = this.slots.find(s=>!s.filled);
                 if(n) {
-                    const b = this.bubbles.find(b => !b.snapped && b.wordText.toLowerCase() === n.w);
+                    const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
                     if(b) {
                         this.correct(b, n);
                     }
@@ -1696,7 +1699,7 @@ window.onunhandledrejection = function(event) {
                 const unfurls = this.slots.filter(s => !s.filled);
                 unfurls.forEach((n, idx) => {
                     setTimeout(() => {
-                        const b = this.bubbles.find(b => !b.snapped && b.wordText.toLowerCase() === n.w);
+                        const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
                         if(b) {
                             this.correct(b, n);
                         }

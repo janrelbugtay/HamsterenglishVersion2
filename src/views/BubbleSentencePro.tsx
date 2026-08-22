@@ -22,6 +22,7 @@ interface GameData {
   topic?: string;
   classLevel?: string;
   sentences: Sentence[];
+  isPublic?: boolean;
 }
 
 export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
@@ -100,6 +101,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
         className: gameData.classLevel || "",
         gameType: "bubble-sentence-pro",
         customSentences: gameData.sentences,
+        isPublic: gameData.isPublic ?? false,
         userId: user.uid,
         updatedAt: new Date().toISOString(),
       }));
@@ -255,6 +257,7 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
   const [classLevel, setClassLevel] = useState(game.classLevel || "");
   const [sentences, setSentences] = useState<Sentence[]>(game.sentences);
   const [errorMsg, setErrorMsg] = useState("");
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   const addSentence = () => {
     setSentences([...sentences, { id: Date.now(), text: '', emoji: '✨', diff: 1 }]);
@@ -291,15 +294,19 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
     }
   };
 
-  const handleSave = () => {
-    const generatedTitle = "Bubble Island Game";
-
+  const initiateSave = () => {
     const validSentences = sentences.filter(s => s.text.trim());
     if(validSentences.length === 0) {
       setErrorMsg("Please add at least one complete sentence.");
       setTimeout(() => setErrorMsg(""), 3000);
       return;
     }
+    setShowPublishModal(true);
+  };
+
+  const handleSave = (isPublic: boolean) => {
+    const generatedTitle = "Bubble Island Game";
+    const validSentences = sentences.filter(s => s.text.trim());
     
     onSave({
       ...game,
@@ -307,7 +314,8 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
       folderId,
       topic,
       classLevel,
-      sentences: validSentences
+      sentences: validSentences,
+      isPublic
     });
   };
 
@@ -315,14 +323,44 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
     <div className="absolute inset-0 z-40 bg-slate-50 dark:bg-slate-900 overflow-y-auto custom-scrollbar pt-20">
       <div className="w-full min-h-full flex flex-col items-center pb-8 px-4">
       <div className="w-full max-w-4xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl overflow-hidden flex flex-col shadow-2xl mb-8 border border-white/20 dark:border-white/10">
-        <div className="bg-white dark:bg-slate-800 p-8 flex flex-col gap-6 border-b-2 border-cyan-500/50">
+        {showPublishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6 transform scale-100 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-2xl font-black text-slate-800 dark:text-white text-center">Publish Game?</h3>
+            <p className="text-slate-600 dark:text-slate-300 text-center font-medium">
+              Would you like to publish this game to the Community so other teachers can use it?
+            </p>
+            <div className="flex flex-col gap-3 mt-4">
+              <button 
+                onClick={() => handleSave(true)}
+                className="w-full py-4 rounded-xl font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-lg shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+              >
+                Yes, Publish (Public)
+              </button>
+              <button 
+                onClick={() => handleSave(false)}
+                className="w-full py-4 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-lg transition-colors"
+              >
+                No, Keep Private
+              </button>
+            </div>
+            <button 
+              onClick={() => setShowPublishModal(false)}
+              className="mt-2 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="bg-white dark:bg-slate-800 p-8 flex flex-col gap-6 border-b-2 border-cyan-500/50">
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-extrabold text-slate-800 dark:text-white tracking-wide">GAME SETUP</h2>
                 <div className="flex gap-3 items-center">
                     <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer">
                         Cancel
                     </button>
-                    <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30 cursor-pointer">
+                    <button onClick={initiateSave} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30 cursor-pointer">
                         <Save size={18} /> Save Game
                     </button>
                 </div>

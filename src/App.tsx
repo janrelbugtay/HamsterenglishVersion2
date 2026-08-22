@@ -26,7 +26,7 @@ import { HamsterPopQuiz } from "./views/HamsterPopQuiz";
 import { StudentRace } from "./views/StudentRace";
 import { LetterLock } from "./views/LetterLock";
 import { useAuth } from "./contexts/AuthContext";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { AlertTriangle } from "lucide-react";
 import { AuthSliderModal } from "./components/AuthSliderModal";
@@ -52,6 +52,26 @@ export default function App() {
       setSelectedGame(null);
     }
   };
+
+  useEffect(() => {
+    const trackVisit = async () => {
+      if (!sessionStorage.getItem("visit_tracked")) {
+        try {
+          const ref = doc(db, 'settings', 'general');
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            await updateDoc(ref, { pageVisits: increment(1) });
+          } else {
+            await setDoc(ref, { pageVisits: 1 });
+          }
+          sessionStorage.setItem("visit_tracked", "true");
+        } catch (e) {
+          console.error("Failed to track visit", e);
+        }
+      }
+    };
+    trackVisit();
+  }, []);
 
   const renderView = () => {
     const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo"];

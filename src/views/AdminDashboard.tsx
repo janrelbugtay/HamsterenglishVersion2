@@ -107,15 +107,27 @@ const APP_GAMES = [
   { id: "student-race", title: "Name Picker", icon: "🏎️" }
 ];
 
-const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish }: any) => {
+const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {
+  const registeredUsers = users.filter((u: any) => !u.isAnonymous).length;
+
   return (
     <div className="space-y-6">
       {/* Top Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <StatCard 
           title="Total Users" value={users.length.toLocaleString()} 
-          subtitle="Registered accounts synced"
+          subtitle="All accounts synced"
           icon={Users} colorClass="bg-indigo-500" 
+        />
+        <StatCard 
+          title="Registered" value={registeredUsers.toLocaleString()} 
+          subtitle="Non-guest accounts"
+          icon={UserCheck} colorClass="bg-emerald-500" 
+        />
+        <StatCard 
+          title="Page Visits" value={pageVisits.toLocaleString()} 
+          subtitle="Total platform visits"
+          icon={Activity} colorClass="bg-blue-500" 
         />
       </div>
       
@@ -328,6 +340,8 @@ export function AdminDashboard({ onViewChange }: { onViewChange: (view: any) => 
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [publishedGames, setPublishedGames] = useState<Record<string, boolean>>({});
 
+  const [pageVisits, setPageVisits] = useState<number>(0);
+
   // Sync users logic
   const handleSyncUsers = async () => {
     setIsSyncing(true);
@@ -409,11 +423,12 @@ export function AdminDashboard({ onViewChange }: { onViewChange: (view: any) => 
     return () => unsubscribe();
   }, []);
 
-  // Fetch published games setting
+  // Fetch published games setting and page visits
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'general'), (doc) => {
       if (doc.exists()) {
         setPublishedGames(doc.data().publishedGames || {});
+        setPageVisits(doc.data().pageVisits || 0);
       }
     });
     return () => unsubscribe();
@@ -465,10 +480,7 @@ export function AdminDashboard({ onViewChange }: { onViewChange: (view: any) => 
       `}>
         <div className="p-6 flex items-center justify-between border-b border-indigo-800/50">
           <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => onViewChange('home')}>
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
-              <Gamepad2 size={24} className="text-white" />
-            </div>
-            <span className="text-2xl font-bold tracking-tight text-white">EduPlay</span>
+            <span className="text-xl font-bold tracking-tight text-white">Admin Dashboard</span>
           </div>
           <button className="lg:hidden text-indigo-300 hover:text-white" onClick={() => setSidebarOpen(false)}>
             <X size={24} />
@@ -583,6 +595,7 @@ export function AdminDashboard({ onViewChange }: { onViewChange: (view: any) => 
                   onViewAll={() => setCurrentRoute('users')}
                   publishedGames={publishedGames}
                   onToggleGamePublish={toggleGamePublish}
+                  pageVisits={pageVisits}
                 />
               )}
               {currentRoute === 'users' && (

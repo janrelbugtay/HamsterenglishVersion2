@@ -190,15 +190,6 @@ export function PublicDashboard({
                       </span>
                     )}
                   </div>
-                  
-                  <div className="flex items-center gap-2 mt-auto pt-4 border-t border-slate-100 dark:border-slate-700/50">
-                    <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-                       <Users size={12} className="text-slate-500" />
-                    </div>
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 line-clamp-1">
-                      {game.creatorName || "Anonymous Teacher"}
-                    </span>
-                  </div>
                 </div>
               </div>
             );
