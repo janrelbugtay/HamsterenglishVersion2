@@ -23,6 +23,7 @@ interface GameData {
   classLevel?: string;
   sentences: Sentence[];
   isPublic?: boolean;
+  mode?: 'word' | 'anagram';
 }
 
 export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
@@ -38,6 +39,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
         topic: initialGame.topic || "",
         classLevel: initialGame.className || "",
         sentences: initialGame.customSentences || [],
+        mode: initialGame.mode || 'word',
       };
     }
     return {
@@ -46,7 +48,8 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
       folderId: "",
       topic: "",
       classLevel: "",
-      sentences: [{ id: Date.now(), text: "", emoji: "✨", diff: 1 }]
+      sentences: [{ id: Date.now(), text: "", emoji: "✨", diff: 1 }],
+      mode: 'word',
     };
   });
 
@@ -101,6 +104,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
         className: gameData.classLevel || "",
         gameType: "bubble-sentence-pro",
         customSentences: gameData.sentences,
+        mode: gameData.mode || "word",
         isPublic: gameData.isPublic ?? false,
         userId: user.uid,
         updatedAt: new Date().toISOString(),
@@ -255,6 +259,7 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
   const [folderId, setFolderId] = useState(game.folderId || "");
   const [topic, setTopic] = useState(game.topic || "");
   const [classLevel, setClassLevel] = useState(game.classLevel || "");
+  const [mode, setMode] = useState<'word' | 'anagram'>(game.mode || 'word');
   const [sentences, setSentences] = useState<Sentence[]>(game.sentences);
   const [errorMsg, setErrorMsg] = useState("");
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -315,6 +320,7 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
       topic,
       classLevel,
       sentences: validSentences,
+      mode,
       isPublic
     });
   };
@@ -366,7 +372,18 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Game Mode</label>
+                    <select 
+                      value={mode}
+                      onChange={(e) => setMode(e.target.value as 'word' | 'anagram')}
+                      className="w-full text-sm font-medium bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-white px-4 py-3 rounded-xl focus:border-blue-500 appearance-none cursor-pointer transition-colors"
+                    >
+                      <option value="word">Words (Sentences)</option>
+                      <option value="anagram">Anagram (Letters)</option>
+                    </select>
+                </div>
                 <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">Topic</label>
                     <input 
@@ -429,7 +446,7 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
                   value={s.text}
                   onChange={(e) => updateSentence(s.id, 'text', e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
-                  placeholder="Type your sentence here..."
+                  placeholder={mode === 'anagram' ? "Type a word or short phrase..." : "Type your sentence here..."}
                   className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 text-slate-800 dark:text-white font-medium"
                 />
               </div>
@@ -440,7 +457,7 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
             onClick={addSentence}
             className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Plus size={20} /> Add Another Sentence
+            <Plus size={20} /> {mode === 'anagram' ? "Add Another Word/Phrase" : "Add Another Sentence"}
           </button>
         </div>
       </div>

@@ -1280,9 +1280,14 @@ window.onunhandledrejection = function(event) {
                 this.placed = 0; this.mistakes = 0; this.bubbles = []; this.slots = [];
                 
                 let clean = s.text.replace(/[.,!?]/g, '');
-                this.words = clean.split(' ').filter(w=>w.length>0);
-                if (this.words.length > 0) {
-                    this.words[0] = this.words[0].charAt(0).toUpperCase() + this.words[0].slice(1);
+                if (Storage.data.mode === 'anagram') {
+                    this.words = clean.replace(/\s+/g, '').split('').filter(w=>w.length>0);
+                    this.words = this.words.map(w => w.toUpperCase());
+                } else {
+                    this.words = clean.split(' ').filter(w=>w.length>0);
+                    if (this.words.length > 0) {
+                        this.words[0] = this.words[0].charAt(0).toUpperCase() + this.words[0].slice(1);
+                    }
                 }
                 
                 // UI Setup
@@ -1729,7 +1734,14 @@ window.onunhandledrejection = function(event) {
                 this.stopPhysics(); document.getElementById('game-body').style.animation='none';
                 Audio.win(); Particles.fireworks();
                 
-                const totalW = this.sents.reduce((acc, val) => acc + val.text.split(' ').length, 0);
+                const totalW = this.sents.reduce((acc, val) => {
+                    let clean = val.text.replace(/[.,!?]/g, '');
+                    if (Storage.data.mode === 'anagram') {
+                        return acc + clean.replace(/\s+/g, '').split('').filter(w=>w.length>0).length;
+                    } else {
+                        return acc + clean.split(' ').filter(w=>w.length>0).length;
+                    }
+                }, 0);
                 const acc = Math.max(0, Math.round(((totalW - this.mistakes)/totalW)*100));
                 
                 let stars = 1; if(acc > 80) stars = 2; if(acc === 100) stars = 3;
@@ -2054,6 +2066,7 @@ window.onunhandledrejection = function(event) {
         window.addEventListener('message', e => { if (!e.data || typeof e.data !== 'object') return; if (e.data.type === 'LOAD_GAME') {
                 Storage.data.categories = [{ id: 'cat_1', name: e.data.data.topic || 'Custom Lesson', icon: '📚', timer: 60, color: '#4285F4', x: 50, y: 50 }];
                 Storage.data.sentences = e.data.data.sentences.map(s => ({ ...s, id: 's_'+Math.random(), catId: 'cat_1' }));
+                Storage.data.mode = e.data.data.mode || 'word';
                 Storage.save();
                 Game.buildWorldMap();
                 Game.openLobby('cat_1');

@@ -592,7 +592,7 @@ const HostLobby = ({ state, dispatch }: { state: any, dispatch: any }) => {
                             <QRCodeSVG value={joinUrl} size={150} />
                         </div>
                         <div className="flex flex-col items-start text-left">
-                            <p className="text-gray-400 font-medium mb-1 uppercase tracking-widest text-sm">Room Password / Code</p>
+                            <p className="text-gray-400 font-medium mb-1 uppercase tracking-widest text-sm">Join at <span className="text-white font-bold">hamsterenglish.online/play</span> or use Code</p>
                             <span className="text-7xl font-black tracking-[0.2em] text-white leading-none">{state.roomId}</span>
                         </div>
                     </div>
