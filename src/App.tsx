@@ -25,6 +25,7 @@ import { Sumo } from "./views/Sumo";
 import { HamsterPopQuiz } from "./views/HamsterPopQuiz";
 import { StudentRace } from "./views/StudentRace";
 import { LetterLock } from "./views/LetterLock";
+import { TicTacToe } from "./views/TicTacToe";
 import { useAuth } from "./contexts/AuthContext";
 import { doc, onSnapshot, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
@@ -36,6 +37,7 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [joinData, setJoinData] = useState<{code: string, nickname: string, gameType: string} | null>(null);
   const { user, loading, isAuthenticating, authError } = useAuth();
   
   const isAdmin = Boolean(user && !user.isAnonymous && user.email?.toLowerCase().trim() === "janrelbugtay03@gmail.com");
@@ -74,7 +76,7 @@ export default function App() {
   }, []);
 
   const renderView = () => {
-    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo"];
+    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo", "tic-tac-toe"];
     if (!user && !publicViews.includes(currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-4">
@@ -135,13 +137,15 @@ export default function App() {
       case "family-feud":
         return <FamilyFeud onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "sumo":
-        return <Sumo onViewChange={handleViewChange} />;
+        return <Sumo onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "hamster-pop-quiz":
         return <HamsterPopQuiz onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "student-race":
         return <StudentRace onViewChange={handleViewChange} />;
       case "letter-lock":
         return <LetterLock />;
+      case "tic-tac-toe":
+        return <TicTacToe onViewChange={handleViewChange} initialJoinData={joinData} />;
       case "dashboard":
         return <UserDashboard />;
       case "public-dashboard":
@@ -173,7 +177,14 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
-      <AuthSliderModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthSliderModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)} 
+        onJoinRoom={(code, name, type) => {
+          setJoinData({code, nickname: name, gameType: type});
+          setCurrentView(type as ViewState);
+        }}
+      />
       <Navigation 
         currentView={currentView} 
         onViewChange={handleViewChange} 

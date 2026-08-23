@@ -567,8 +567,8 @@ window.onunhandledrejection = function(event) {
             </div>
             
             <div class="flex gap-4 justify-center">
-                <button onclick="Game.showScreen('screen-menu')" class="btn-premium px-8 py-4 text-xl text-gray-700">Map</button>
-                <button onclick="Game.showCategorySelect()" class="btn-premium blue px-8 py-4 text-xl">Next Level</button>
+                <button onclick="if(window.self !== window.top) { window.parent.postMessage({type: 'QUIT_GAME'}, '*'); } else { Game.showScreen('screen-menu') }" class="btn-premium px-8 py-4 text-xl text-gray-700">Exit Game</button>
+                <button onclick="Game.start(Game.selectedCatId)" class="btn-premium blue px-8 py-4 text-xl">Play Again</button>
             </div>
         </div>
     </div>

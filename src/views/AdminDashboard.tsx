@@ -104,7 +104,8 @@ const APP_GAMES = [
   { id: "sumo", title: "Sumo Tags", icon: "🤼" },
   { id: "letter-lock", title: "Letter Lock", icon: "🎯" },
   { id: "hamster-pop-quiz", title: "Hamster Pop Quiz", icon: "🐹" },
-  { id: "student-race", title: "Name Picker", icon: "🏎️" }
+  { id: "student-race", title: "Name Picker", icon: "🏎️" },
+  { id: "tic-tac-toe", title: "Tic Tac Toe Battle", icon: "❌" }
 ];
 
 const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {

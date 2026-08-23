@@ -197,6 +197,20 @@ function FeaturedGamesSection({
       isAI: false,
       color: "from-indigo-600 to-yellow-400",
       icon: "🏎️",
+    },
+    {
+      id: "tic-tac-toe",
+      title: "Tic Tac Toe Battle",
+      description: "Classic Tic Tac Toe with a multiplayer twist! Play locally or host a match.",
+      difficulty: "Medium",
+      players: "2 Players",
+      time: "5m",
+      subject: "Logic",
+      grade: "All",
+      imageUrl: "https://ui-avatars.com/api/?name=Tic+Tac+Toe&background=1e293b&color=fff&size=512",
+      isAI: false,
+      color: "from-gray-700 to-gray-900",
+      icon: "❌",
     }
   ];
 

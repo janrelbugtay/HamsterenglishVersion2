@@ -18,7 +18,8 @@ export type ViewState =
   | "sumo"
   | "hamster-pop-quiz"
   | "student-race"
-  | "letter-lock";
+  | "letter-lock"
+  | "tic-tac-toe";
 
 export interface Game {
   id: string;

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { ViewState } from "../types";
+import { GameThumbnail } from "../components/GameThumbnail";
 import { Gamepad2, Play, Search, Users, Sparkles, Filter } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -59,7 +60,8 @@ export function PublicDashboard({
     { id: "sumo", title: "Sumo", color: "text-red-600", icon: "https://drive.google.com/thumbnail?id=19zB6Kpor6pry7TV3XvX3eIZdxpd3ys40&sz=w1000" },
     { id: "hamster-pop-quiz", title: "Hamster Pop", color: "text-pink-600", icon: "https://images.unsplash.com/photo-1425082661705-1834bfd08711?q=80&w=1000&auto=format&fit=crop" },
     { id: "student-race", title: "Student Race", color: "text-violet-600", icon: "https://images.unsplash.com/photo-1541604193435-22287d32c2c2?q=80&w=1000&auto=format&fit=crop" },
-    { id: "letter-lock", title: "Letter Lock", color: "text-blue-600", icon: "https://ui-avatars.com/api/?name=Letter+Lock&background=38bdf8&color=fff&size=512" }
+    { id: "letter-lock", title: "Letter Lock", color: "text-blue-600", icon: "https://ui-avatars.com/api/?name=Letter+Lock&background=38bdf8&color=fff&size=512" },
+    { id: "tic-tac-toe", title: "Tic Tac Toe Battle", color: "text-gray-800", icon: "X O" }
   ];
 
   const getTemplateInfo = (templateId: string) => {
@@ -165,11 +167,7 @@ export function PublicDashboard({
               >
                 <div className="aspect-[4/3] bg-slate-50 dark:bg-slate-900 flex items-center justify-center relative overflow-hidden border-b-2 border-slate-100 dark:border-slate-700">
                    <div className="absolute inset-0 bg-gradient-to-br from-brand-purple/5 to-transparent z-10"></div>
-                   {info.icon && (info.icon.startsWith("http") || info.icon.startsWith("/")) ? (
-                     <img src={info.icon} referrerPolicy="no-referrer" alt={info.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                   ) : (
-                     <Gamepad2 size={64} className={`opacity-20 ${info.color} relative z-10`} />
-                   )}
+                   <GameThumbnail gameType={game.gameType} info={info} />
                    
                    {/* Play overlay */}
                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all duration-300 z-30">

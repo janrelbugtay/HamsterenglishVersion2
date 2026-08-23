@@ -53,6 +53,13 @@ service cloud.firestore {
         && data.joinedAt is number;
     }
 
+    match /ttt_rooms/{roomId} {
+      allow read, write: if true;
+      match /actions/{actionId} {
+        allow read, write: if true;
+      }
+    }
+    
     match /rooms/{roomId} {
       // Allow read to everyone so players can join
       allow get: if isValidId(roomId);
