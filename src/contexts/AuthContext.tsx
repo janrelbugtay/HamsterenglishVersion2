@@ -10,7 +10,6 @@ interface AuthContextType {
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signInWithFacebook: () => Promise<void>;
-  signInWithZalo: () => Promise<void>;
   linkWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
@@ -122,19 +121,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('User closed Facebook Sign-In popup');
         return;
       }
+      
+      // If popup is blocked or cross-origin issues, fallback to redirect
+      if (error?.code === 'auth/popup-blocked' || error?.code === 'auth/unauthorized-domain' || error?.message?.includes('cross-origin')) {
+        console.log('Facebook Popup failed, falling back to redirect...');
+        try {
+          await signInWithRedirect(auth, facebookProvider);
+          return;
+        } catch (redirectError: any) {
+          if (redirectError?.code !== 'auth/popup-closed-by-user' && redirectError?.code !== 'auth/cancelled-popup-request') {
+            console.error('Facebook Redirect sign in also failed', redirectError);
+          }
+        }
+      }
+
       console.error('Error signing in with Facebook', error);
-      setAuthError(`Sign in failed: ${error.message}`);
+      let errorMessage = `Sign in failed: ${error.message}`;
+      
+      if (error?.code === 'auth/operation-not-supported-in-this-environment' || error?.message?.includes('auth/configuration-not-found') || error?.code === 'auth/invalid-credential') {
+        errorMessage = "Facebook login is not configured in Firebase yet.\n\nPlease enable it in Firebase Console -> Authentication -> Sign-in method, and add your Facebook App ID & App Secret.\n\nYou also need to add your OAuth Redirect URI to your Facebook app settings.";
+        alert("Facebook authentication setup is incomplete.\nPlease see the error message on screen.");
+      } else if (error?.code === 'auth/unauthorized-domain') {
+        errorMessage = "Unauthorized domain for Facebook login. Please add this domain to Firebase Authentication Authorized Domains.";
+      }
+      
+      setAuthError(errorMessage);
     } finally {
       isAuthenticatingRef.current = false;
       setIsAuthenticating(false);
     }
-  };
-
-  const signInWithZalo = async () => {
-    // Zalo does not have native Firebase Auth support out of the box.
-    // For now, we display an alert or custom error message indicating setup is needed.
-    setAuthError("Zalo Authentication requires custom OAuth setup in the developer console. Coming soon!");
-    alert("Zalo Authentication requires custom OAuth setup in the developer console. Coming soon!");
   };
 
   const signInWithGoogle = async () => {
@@ -237,7 +252,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, signInWithFacebook, signInWithZalo, linkWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, signInWithFacebook, linkWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );
