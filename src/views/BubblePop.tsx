@@ -522,7 +522,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   };
 
   const handlePop = (bubble: any, playerIndex: number) => {
-    if (!graphicsState.current.isQuestionActive) return;
+    if (!graphicsState.current.isQuestionActive || bubble.popped || bubble.state === 'shaking') return;
     
     bubble.state = 'shaking'; 
     

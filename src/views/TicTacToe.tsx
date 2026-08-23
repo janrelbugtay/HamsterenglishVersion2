@@ -61,6 +61,9 @@ const NetworkManager = {
     unsubscribeState: null as any,
     unsubscribeActions: null as any,
     messageCallback: null as any,
+    broadcastTimeout: null as any,
+    pendingState: null as any,
+    lastBroadcastTime: 0,
     init: (room: string, isHostRole: boolean, id: string) => {
         NetworkManager.roomId = room;
         NetworkManager.isHost = isHostRole;
@@ -94,8 +97,26 @@ const NetworkManager = {
     // Host broadcasts state to all players
     broadcastState: (state: any) => {
         if (!NetworkManager.isHost || !NetworkManager.roomId) return;
-        const roomRef = doc(db, 'ttt_rooms', NetworkManager.roomId);
-        setDoc(roomRef, { state, updatedAt: Date.now() }).catch(() => {});
+        
+        const now = Date.now();
+        const timeSinceLast = now - (NetworkManager.lastBroadcastTime || 0);
+        const THROTTLE_MS = 200; // max 5 updates per second
+
+        if (timeSinceLast >= THROTTLE_MS) {
+            NetworkManager.lastBroadcastTime = now;
+            const roomRef = doc(db, 'ttt_rooms', NetworkManager.roomId);
+            setDoc(roomRef, { state, updatedAt: now }).catch(() => {});
+        } else {
+            NetworkManager.pendingState = state;
+            if (!NetworkManager.broadcastTimeout) {
+                NetworkManager.broadcastTimeout = setTimeout(() => {
+                    NetworkManager.lastBroadcastTime = Date.now();
+                    const roomRef = doc(db, 'ttt_rooms', NetworkManager.roomId!);
+                    setDoc(roomRef, { state: NetworkManager.pendingState, updatedAt: Date.now() }).catch(() => {});
+                    NetworkManager.broadcastTimeout = null;
+                }, THROTTLE_MS - timeSinceLast);
+            }
+        }
     },
     // Player sends action to host
     sendActionToHost: (action: any) => {
@@ -108,6 +129,10 @@ const NetworkManager = {
         NetworkManager.messageCallback = callback;
     },
     cleanup: () => {
+        if (NetworkManager.broadcastTimeout) {
+            clearTimeout(NetworkManager.broadcastTimeout);
+            NetworkManager.broadcastTimeout = null;
+        }
         if (NetworkManager.unsubscribeState) {
             NetworkManager.unsubscribeState();
             NetworkManager.unsubscribeState = null;

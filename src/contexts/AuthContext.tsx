@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, linkWithPopup, GoogleAuthProvider, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db, googleProvider } from '../lib/firebase';
+import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,8 @@ interface AuthContextType {
   isAuthenticating: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
+  signInWithZalo: () => Promise<void>;
   linkWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, name: string) => Promise<void>;
@@ -105,6 +107,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       isAuthenticatingRef.current = false;
       setIsAuthenticating(false);
     }
+  };
+
+  const signInWithFacebook = async () => {
+    if (isAuthenticatingRef.current) return;
+    isAuthenticatingRef.current = true;
+    setIsAuthenticating(true);
+    setAuthError(null);
+
+    try {
+      await signInWithPopup(auth, facebookProvider);
+    } catch (error: any) {
+      if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+        console.log('User closed Facebook Sign-In popup');
+        return;
+      }
+      console.error('Error signing in with Facebook', error);
+      setAuthError(`Sign in failed: ${error.message}`);
+    } finally {
+      isAuthenticatingRef.current = false;
+      setIsAuthenticating(false);
+    }
+  };
+
+  const signInWithZalo = async () => {
+    // Zalo does not have native Firebase Auth support out of the box.
+    // For now, we display an alert or custom error message indicating setup is needed.
+    setAuthError("Zalo Authentication requires custom OAuth setup in the developer console. Coming soon!");
+    alert("Zalo Authentication requires custom OAuth setup in the developer console. Coming soon!");
   };
 
   const signInWithGoogle = async () => {
@@ -207,7 +237,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, linkWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticating, authError, signInWithGoogle, signInWithFacebook, signInWithZalo, linkWithGoogle, signInWithEmail, signUpWithEmail, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -6,7 +6,7 @@ import { db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 export function AuthSliderModal({ isOpen, onClose, onJoinRoom }: { isOpen: boolean; onClose: () => void; onJoinRoom?: (code: string, nickname: string, gameType: string) => void }) {
-  const { signInWithGoogle, isAuthenticating } = useAuth();
+  const { signInWithGoogle, signInWithFacebook, signInWithZalo, isAuthenticating } = useAuth();
   
   const [roomCode, setRoomCode] = useState('');
   const [nickname, setNickname] = useState('');
@@ -44,6 +44,10 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom }: { isOpen: boole
   };
 
   const googleIconHtml = `<svg class="w-6 h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>`;
+
+  const facebookIconHtml = `<svg class="w-6 h-6 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" fill="#1877F2"><path d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/></svg>`;
+
+  const zaloIconHtml = `<svg class="w-6 h-6 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#0068ff" d="M24,4C12.95,4,4,12.95,4,24c0,5.18,1.96,9.89,5.19,13.43c-0.65,2.44-2.17,5.08-2.31,5.33c-0.19,0.36-0.09,0.79,0.24,1.04 C7.3,43.93,7.5,44,7.7,44c0.23,0,0.47-0.09,0.64-0.25c3.08-2.92,5.65-3.41,7.21-3.41c2.61,1.05,5.46,1.66,8.45,1.66 c11.05,0,20-8.95,20-20S35.05,4,24,4z M32.61,29.96c-0.42,0.1-0.89,0.22-1.39,0.34c-1.35,0.32-3.1,0.73-4.59,0.85 c-0.65,0.05-1.28,0.06-1.87,0.06c-1.66,0-3.12-0.19-4.32-0.5c-1.29-0.34-2.28-0.91-2.94-1.69c-0.56-0.66-0.84-1.46-0.84-2.36 c0-1.78,1.14-3.52,3.37-5.16l2.14-1.57c-0.38-0.11-0.78-0.18-1.21-0.18c-1.26,0-2.31,0.51-3.03,1.48c-0.24,0.33-0.71,0.4-1.04,0.16 c-0.33-0.24-0.4-0.71-0.16-1.04c1.07-1.44,2.69-2.2,4.52-2.2c2.09,0,3.95,1.05,5.1,2.87l2.84-2.09c0.28-0.21,0.67-0.18,0.92,0.07 c0.25,0.24,0.31,0.63,0.14,0.94l-3.37,5.92c0.75-0.12,1.52-0.29,2.26-0.46c0.41-0.1,0.82-0.19,1.19-0.28 c1.26-0.31,2.5-0.61,3.48-0.61c0.41,0,0.75,0.34,0.75,0.75S33.02,29.96,32.61,29.96z"/></svg>`;
 
 
   return (
@@ -94,6 +98,34 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom }: { isOpen: boole
                 <div dangerouslySetInnerHTML={{ __html: googleIconHtml }} className="group-hover:scale-110 transition-transform" />
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-lg">
                   {isAuthenticating ? "Signing In..." : "Sign in with Google"}
+                </span>
+              </button>
+
+              <button 
+                onClick={() => { 
+                  signInWithFacebook(); 
+                  onClose(); 
+                }} 
+                disabled={isAuthenticating}
+                className="w-full flex items-center justify-center gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm group"
+              >
+                <div dangerouslySetInnerHTML={{ __html: facebookIconHtml }} className="group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-lg">
+                  {isAuthenticating ? "Signing In..." : "Sign in with Facebook"}
+                </span>
+              </button>
+
+              <button 
+                onClick={() => { 
+                  signInWithZalo(); 
+                  onClose(); 
+                }} 
+                disabled={isAuthenticating}
+                className="w-full flex items-center justify-center gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm group"
+              >
+                <div dangerouslySetInnerHTML={{ __html: zaloIconHtml }} className="group-hover:scale-110 transition-transform" />
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-lg">
+                  {isAuthenticating ? "Signing In..." : "Sign in with Zalo"}
                 </span>
               </button>
 
