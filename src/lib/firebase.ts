@@ -6,7 +6,7 @@ const firebaseConfig = {
   projectId: "plucky-aegis-408915",
   appId: "1:564796706827:web:392d7514feecfd627f770e",
   apiKey: "AIzaSyDZHL0cknHt3W6gkIUQD0f2L-w8ZPBqTRw",
-  authDomain: "hamsterenglish.online",
+  authDomain: "plucky-aegis-408915.firebaseapp.com",
   storageBucket: "plucky-aegis-408915.firebasestorage.app",
   messagingSenderId: "564796706827",
   measurementId: ""
