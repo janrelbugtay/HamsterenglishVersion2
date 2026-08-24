@@ -472,8 +472,8 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
       </div>
 
       <style dangerouslySetInnerHTML={{__html: `
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;700&display=swap');
-        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800;900&family=Inter:wght@400;500;700&display=swap');
+        .font-space { font-family: 'Space Grotesk', sans-serif; }
         
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
@@ -506,7 +506,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
             <div className="w-full min-h-full flex flex-col items-center p-4 sm:p-8 pt-16">
             <div className="w-full max-w-5xl flex flex-col items-center mt-2 sm:mt-8 mb-12">
                <Sparkles size={48} className="text-cyan-400 mb-4 animate-pulse" />
-               <h1 className="text-4xl sm:text-6xl font-orbitron font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 uppercase drop-shadow-lg text-center">
+               <h1 className="text-4xl sm:text-6xl font-space font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-400 uppercase drop-shadow-lg text-center">
                  Neon <br className="sm:hidden" />Chain
                </h1>
                <div className="h-1 w-32 bg-gradient-to-r from-cyan-400 to-transparent mt-4 rounded-full"></div>
@@ -519,7 +519,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                   {/* Teams Configuration */}
                   <div className={`${bgPanel} border rounded-3xl p-6 sm:p-8 relative overflow-hidden group transition-colors`}>
                      <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
-                     <h2 className={`text-xl font-orbitron font-bold ${textMain} mb-6 flex items-center`}><Users className="mr-3 text-cyan-400"/> Team Configuration</h2>
+                     <h2 className={`text-xl font-space font-bold ${textMain} mb-6 flex items-center`}><Users className="mr-3 text-cyan-400"/> Team Configuration</h2>
                      
                      <div className="flex flex-wrap gap-3 mb-8">
                        {[2, 3, 4].map(num => (
@@ -554,7 +554,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                   {/* Timer Configuration */}
                   <div className={`${bgPanel} border rounded-3xl p-6 sm:p-8 relative overflow-hidden group transition-colors`}>
                      <div className="absolute top-0 left-0 w-1 h-full bg-pink-500"></div>
-                     <h2 className={`text-xl font-orbitron font-bold ${textMain} mb-6 flex items-center`}><Clock className="mr-3 text-pink-400"/> Chrono Parameters</h2>
+                     <h2 className={`text-xl font-space font-bold ${textMain} mb-6 flex items-center`}><Clock className="mr-3 text-pink-400"/> Chrono Parameters</h2>
                      
                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                        <div>
@@ -609,12 +609,12 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                     
                     <div className={`flex justify-between items-center mb-10 pb-6 border-b ${borderLight}`}>
                       <div className="text-center">
-                        <p className={`text-3xl font-orbitron font-black ${textMain}`}>{formatTime(config.globalTime)}</p>
+                        <p className={`text-3xl font-space font-black ${textMain}`}>{formatTime(config.globalTime)}</p>
                         <p className={`text-[10px] ${textMuted} uppercase tracking-widest`}>Global Time</p>
                       </div>
                       <div className={`w-px h-12 ${isLight ? 'bg-slate-200' : 'bg-white/10'}`}></div>
                       <div className="text-center">
-                        <p className="text-3xl font-orbitron font-black text-pink-500 dark:text-pink-400">{config.turnTime}s</p>
+                        <p className="text-3xl font-space font-black text-pink-500 dark:text-pink-400">{config.turnTime}s</p>
                         <p className={`text-[10px] ${textMuted} uppercase tracking-widest`}>Per Turn</p>
                       </div>
                     </div>
@@ -626,7 +626,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                              <div className="w-2 h-2 rounded-full shadow-[0_0_8px_currentColor]" style={{backgroundColor: tColors[idx+1].colorHex, color: tColors[idx+1].colorHex}}></div>
                              <span className={isLight ? 'text-slate-700' : 'text-slate-200'}>{config.teamNames[idx]}</span>
                            </span>
-                           <span className={`font-orbitron ${isLight ? 'text-slate-400' : 'text-slate-600'} font-bold`}>0</span>
+                           <span className={`font-space ${isLight ? 'text-slate-400' : 'text-slate-600'} font-bold`}>0</span>
                          </div>
                        ))}
                     </div>
@@ -640,7 +640,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                  {/* Launch Button */}
                  <button 
                    onClick={startGame}
-                   className="group relative w-full px-8 py-6 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-orbitron font-black rounded-3xl shadow-[0_0_40px_-10px_rgba(34,211,238,0.5)] transition-all hover:scale-[1.02] active:scale-95 text-2xl flex items-center justify-center overflow-hidden border border-white/20"
+                   className="group relative w-full px-8 py-6 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white font-space font-black rounded-3xl shadow-[0_0_40px_-10px_rgba(34,211,238,0.5)] transition-all hover:scale-[1.02] active:scale-95 text-2xl flex items-center justify-center overflow-hidden border border-white/20"
                  >
                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-purple-400 opacity-0 group-hover:opacity-20 transition-opacity"></div>
                    <div className="absolute -left-full top-0 w-1/2 h-full bg-white/20 skew-x-12 group-hover:left-[200%] transition-all duration-1000 ease-in-out"></div>
@@ -669,7 +669,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                        <User size={16} className="mr-2 shrink-0"/> 
                        <span className="truncate">{config.teamNames[0]}</span>
                      </span>
-                     <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-orbitron font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t1}</span>
+                     <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-space font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t1}</span>
                      <div className="flex gap-1 mt-3">
                        {Array.from({length: config.targetWins}).map((_, i) => (
                          <Trophy key={i} size={14} className={i < teamWins.t1 ? tColors[1].text : 'text-slate-500 opacity-30'} />
@@ -692,7 +692,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                          <User size={16} className="mr-2 shrink-0"/> 
                          <span className="truncate">{config.teamNames[2]}</span>
                        </span>
-                       <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-orbitron font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t3}</span>
+                       <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-space font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t3}</span>
                        <div className="flex gap-1 mt-3">
                          {Array.from({length: config.targetWins}).map((_, i) => (
                            <Trophy key={i} size={14} className={i < teamWins.t3 ? tColors[3].text : 'text-slate-500 opacity-30'} />
@@ -709,12 +709,12 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
 
                 {/* Desktop Global Timer (Center) */}
                 <div className="hidden sm:flex flex-col items-center justify-center shrink-0 w-48 lg:w-56 mx-auto order-first sm:order-none absolute sm:relative top-0 left-0 right-0 sm:top-auto mb-4 sm:mb-0">
-                   <h1 className={`text-lg lg:text-xl font-orbitron font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-slate-400 to-slate-600' : 'from-slate-300 to-slate-500'} drop-shadow-sm uppercase mb-2 lg:mb-3 flex items-center gap-2`}>
+                   <h1 className={`text-lg lg:text-xl font-space font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r ${isLight ? 'from-slate-600 to-slate-800' : 'from-slate-300 to-slate-500'} drop-shadow-sm uppercase mb-2 lg:mb-3 flex items-center gap-2`}>
                      <Timer size={18} /> GLOBAL
                    </h1>
                    <div className={`px-6 lg:px-8 py-2 lg:py-3 rounded-2xl flex items-center space-x-3 transition-colors border shadow-inner backdrop-blur-md w-full justify-center
                      ${timeLeft <= 10 && gameState === 'playing' ? 'bg-red-500/10 border-red-500/50 animate-pulse text-red-500 dark:text-red-400' : `${isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900/50 border-white/10 text-slate-300'}`}`}>
-                      <span className="text-2xl lg:text-4xl font-bold font-orbitron tracking-widest">{formatTime(timeLeft)}</span>
+                      <span className="text-2xl lg:text-4xl font-bold font-space tracking-widest">{formatTime(timeLeft)}</span>
                    </div>
                 </div>
 
@@ -727,7 +727,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                          <User size={16} className="mr-2 shrink-0"/> 
                          <span className="truncate">{config.teamNames[3]}</span>
                        </span>
-                       <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-orbitron font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t4}</span>
+                       <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-space font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t4}</span>
                        <div className="flex gap-1 mt-3">
                          {Array.from({length: config.targetWins}).map((_, i) => (
                            <Trophy key={i} size={14} className={i < teamWins.t4 ? tColors[4].text : 'text-slate-500 opacity-30'} />
@@ -750,7 +750,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                        <span className="truncate">{config.teamNames[1]}</span>
                        <User size={16} className="ml-2 shrink-0"/>
                      </span>
-                     <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-orbitron font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t2}</span>
+                     <span className={`text-4xl sm:text-6xl lg:text-[5rem] font-space font-black ${textMain} drop-shadow-2xl leading-none`}>{scores.t2}</span>
                      <div className="flex gap-1 mt-3">
                        {Array.from({length: config.targetWins}).map((_, i) => (
                          <Trophy key={i} size={14} className={i < teamWins.t2 ? tColors[2].text : 'text-slate-500 opacity-30'} />
@@ -771,7 +771,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                  <div className={`px-6 py-2 rounded-xl flex items-center space-x-2 transition-colors border shadow-inner backdrop-blur-md
                    ${timeLeft <= 10 && gameState === 'playing' ? 'bg-red-500/10 border-red-500/50 animate-pulse text-red-500 dark:text-red-400' : `${isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-slate-900/50 border-white/10 text-slate-300'}`}`}>
                     <Timer size={16} />
-                    <span className="text-xl font-bold font-orbitron tracking-widest">{formatTime(timeLeft)}</span>
+                    <span className="text-xl font-bold font-space tracking-widest">{formatTime(timeLeft)}</span>
                  </div>
               </div>
 
@@ -781,13 +781,13 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                   <div className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 flex-1 border-2 
                     ${currentTeam === 3 && gameState === 'playing' ? (isLight ? 'bg-purple-50 border-purple-300' : `${tColors[3].activeBg} ${tColors[3].shadow} ${tColors[3].border}`) : (isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800 opacity-60')}`}>
                      <span className={`text-[10px] ${tColors[3].text} font-black uppercase truncate max-w-[80px]`}>{config.teamNames[2]}</span>
-                     <span className={`text-2xl font-orbitron font-black ${textMain}`}>{scores.t3}</span>
+                     <span className={`text-2xl font-space font-black ${textMain}`}>{scores.t3}</span>
                   </div>
                   {config.teamCount >= 4 && (
                     <div className={`flex flex-col items-center p-3 rounded-2xl transition-all duration-300 flex-1 border-2 
                       ${currentTeam === 4 && gameState === 'playing' ? (isLight ? 'bg-emerald-50 border-emerald-300' : `${tColors[4].activeBg} ${tColors[4].shadow} ${tColors[4].border}`) : (isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800 opacity-60')}`}>
                        <span className={`text-[10px] ${tColors[4].text} font-black uppercase truncate max-w-[80px]`}>{config.teamNames[3]}</span>
-                       <span className={`text-2xl font-orbitron font-black ${textMain}`}>{scores.t4}</span>
+                       <span className={`text-2xl font-space font-black ${textMain}`}>{scores.t4}</span>
                     </div>
                   )}
                 </div>
@@ -803,7 +803,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                 {wordChain.length === 0 && gameState === 'playing' ? (
                   <div className={`m-auto flex flex-col items-center justify-center ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
                     <Crosshair size={48} className="mb-4 animate-spin-slow opacity-20" />
-                    <p className="font-orbitron text-lg tracking-widest uppercase">Awaiting Terminal Input</p>
+                    <p className="font-space text-lg tracking-widest uppercase">Awaiting Terminal Input</p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center w-full max-w-3xl mx-auto">
@@ -825,10 +825,10 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                           )}
 
                           {/* Word Box */}
-                          <div className={`relative px-8 sm:px-12 py-4 sm:py-6 rounded-xl border-2 shadow-2xl flex flex-col items-center transition-all duration-500
+                          <div className={`relative px-6 sm:px-10 py-6 sm:py-8 rounded-xl border-2 shadow-2xl flex flex-col items-center transition-all duration-500
                             ${isSystem ? (isLight ? 'bg-white border-slate-300' : 'bg-slate-900 border-slate-700') : (isLight ? 'bg-white' : 'bg-[#0a0d20]')}
                             ${!isSystem ? (isLight && !isLast ? 'border-slate-200' : teamData.border) : ''}
-                            ${isLast ? `scale-110 shadow-[0_0_30px_-5px_rgba(255,255,255,0.1)] ${!isSystem && !isLight ? teamData.shadow + ' animate-pulse ring-2 ring-white/10' : ''} ${!isSystem && isLight ? `shadow-[0_0_20px_-5px_${teamData.colorHex}40] ring-4 ring-cyan-400/20` : ''}` : 'opacity-70 hover:opacity-100 hover:scale-100'}
+                            ${isLast ? `scale-110 shadow-[0_0_40px_-5px_rgba(255,255,255,0.15)] ${!isSystem && !isLight ? teamData.shadow + ' animate-pulse ring-2 ring-white/20' : ''} ${!isSystem && isLight ? `shadow-[0_0_20px_-5px_${teamData.colorHex}40] ring-4 ring-cyan-400/20` : ''}` : 'opacity-70 hover:opacity-100 hover:scale-100'}
                           `}>
                             {/* Team Header inside Box */}
                             {!isSystem && (
@@ -844,7 +844,10 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                               </div>
                             )}
 
-                            <span className={`font-orbitron text-xl sm:text-3xl font-black uppercase tracking-wider ${textMain} mt-1`}>
+                            <span className={`font-space text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-widest mt-1
+                              ${isLast && !isSystem && !isLight ? 'text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]' : textMain}
+                              ${isLast && !isSystem && isLight ? 'text-slate-900 drop-shadow-sm' : ''}
+                            `}>
                               {(() => {
                                 if (item.text.length < 2) return item.text;
                                 const isX = item.text.slice(-1) === 'x';
@@ -852,9 +855,9 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                                   return (
                                     <>
                                       {item.text.slice(0, -1)}
-                                      <span className={`${isLast ? (isLight ? 'text-amber-500' : 'text-yellow-400') + ' drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] relative' : 'opacity-80'}`}>
+                                      <span className={`${isLast ? (isLight ? 'text-orange-500 font-black' : 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,1)]') + ' relative' : 'opacity-80'}`}>
                                         {item.text.slice(-1)}
-                                        {isLast && <span className={`absolute -bottom-2 left-0 w-full h-[2px] ${isLight ? 'bg-amber-500 shadow-[0_0_5px_#f59e0b]' : 'bg-yellow-400 shadow-[0_0_5px_#facc15]'} animate-pulse`}></span>}
+                                        {isLast && <span className={`absolute -bottom-3 left-0 w-full h-[4px] rounded-full ${isLight ? 'bg-orange-500 shadow-sm' : 'bg-yellow-400 shadow-[0_0_10px_#facc15]'} animate-pulse`}></span>}
                                       </span>
                                     </>
                                   );
@@ -862,9 +865,9 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                                   return (
                                     <>
                                       {item.text.slice(0, -2)}
-                                      <span className={`${isLast ? (isLight ? 'text-amber-500' : 'text-yellow-400') + ' drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] relative' : 'opacity-80'}`}>
+                                      <span className={`${isLast ? (isLight ? 'text-orange-500 font-black' : 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,1)]') + ' relative' : 'opacity-80'}`}>
                                         {item.text.slice(-2, -1)}
-                                        {isLast && <span className={`absolute -bottom-2 left-0 w-full h-[2px] ${isLight ? 'bg-amber-500 shadow-[0_0_5px_#f59e0b]' : 'bg-yellow-400 shadow-[0_0_5px_#facc15]'} animate-pulse`}></span>}
+                                        {isLast && <span className={`absolute -bottom-3 left-0 w-full h-[4px] rounded-full ${isLight ? 'bg-orange-500 shadow-sm' : 'bg-yellow-400 shadow-[0_0_10px_#facc15]'} animate-pulse`}></span>}
                                       </span>
                                       <span>x</span>
                                     </>
@@ -904,7 +907,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                               }}
                             />
                           </svg>
-                          <span className={`font-orbitron font-black text-3xl sm:text-4xl drop-shadow-lg
+                          <span className={`font-space font-black text-3xl sm:text-4xl drop-shadow-lg
                             ${turnTimeLeft <= 5 ? 'text-red-500 animate-pulse' : textMain}
                           `}>{turnTimeLeft}</span>
                        </div>
@@ -928,9 +931,9 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                         
                         {/* Terminal Target Letter Box */}
                         {gameState === 'playing' && (
-                          <div className={`px-4 sm:px-6 py-4 sm:py-6 border-r ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-900/80'} flex flex-col items-center justify-center
+                          <div className={`px-4 sm:px-8 py-4 sm:py-6 border-r ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-900/80'} flex flex-col items-center justify-center
                             ${isLight ? activeStyle.text.replace('400', '600') : activeStyle.text}`}>
-                            <span className={`font-orbitron text-2xl sm:text-4xl font-black uppercase ${!isLight ? 'drop-shadow-[0_0_8px_currentColor]' : ''}`}>{targetLetter}</span>
+                            <span className={`font-space text-4xl sm:text-6xl font-black uppercase ${!isLight ? 'drop-shadow-[0_0_15px_currentColor]' : 'drop-shadow-md'}`}>{targetLetter}</span>
                           </div>
                         )}
 
@@ -945,8 +948,8 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                           }}
                           disabled={gameState !== 'playing' || isLoading}
                           placeholder={gameState === 'playing' ? `AWAITING INPUT...` : "SYSTEM OFFLINE"}
-                          className={`w-full bg-transparent px-4 sm:px-6 py-4 sm:py-6 text-xl sm:text-2xl font-orbitron font-bold ${textMain} ${isLight ? 'placeholder-slate-400' : 'placeholder-slate-600'} focus:outline-none transition-all
-                            disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed uppercase tracking-wider
+                          className={`w-full bg-transparent px-4 sm:px-6 py-4 sm:py-6 text-2xl sm:text-4xl font-space font-black ${textMain} ${isLight ? 'placeholder-slate-500' : 'placeholder-slate-600'} focus:outline-none transition-all
+                            disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed uppercase tracking-widest ${isLight ? '' : 'drop-shadow-md'}
                           `}
                           autoComplete="off"
                           spellCheck="false"
@@ -964,7 +967,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                     <button 
                       type="submit"
                       disabled={gameState !== 'playing' || isLoading || !currentInput.trim()}
-                      className={`shrink-0 text-white px-6 sm:px-12 py-4 sm:py-[1.6rem] rounded-r-2xl font-orbitron font-black tracking-widest transition-all text-lg sm:text-xl border-2 border-l-0 border-transparent relative overflow-hidden
+                      className={`shrink-0 text-white px-6 sm:px-12 py-4 sm:py-[1.6rem] rounded-r-2xl font-space font-black tracking-widest transition-all text-lg sm:text-xl border-2 border-l-0 border-transparent relative overflow-hidden
                         disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:disabled:text-slate-600 disabled:border-slate-300 dark:disabled:border-slate-700
                         ${gameState === 'playing' ? activeStyle.btn : (isLight ? 'bg-slate-400' : 'bg-slate-700')}
                       `}
@@ -1032,11 +1035,11 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                     
                     <Trophy size={80} className={`mb-6 ${isTie ? 'text-slate-400 dark:text-slate-500' : wColor.text} drop-shadow-2xl`} />
                     
-                    <h3 className={`text-5xl sm:text-7xl font-orbitron font-black ${textMain} text-center drop-shadow-lg mb-2`}>
+                    <h3 className={`text-5xl sm:text-7xl font-space font-black ${textMain} text-center drop-shadow-lg mb-2`}>
                       {isTie ? "DRAW DETECTED" : `${config.teamNames[wId - 1]} WINS`}
                     </h3>
                     
-                    <div className="text-7xl sm:text-9xl font-black font-orbitron mt-4 drop-shadow-[0_0_30px_currentColor]">
+                    <div className="text-7xl sm:text-9xl font-black font-space mt-4 drop-shadow-[0_0_30px_currentColor]">
                        {maxScore} <span className="text-2xl text-slate-400 dark:text-white/50 tracking-widest">PTS</span>
                     </div>
                  </div>
@@ -1052,7 +1055,7 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                        <div key={tId} className={`p-4 sm:p-6 rounded-2xl relative overflow-hidden border ${isW ? `${tData.border} ${isLight ? 'bg-slate-50' : 'bg-slate-900'}` : (isLight ? 'bg-white border-slate-200' : 'bg-slate-900/50 border-white/5')} backdrop-blur-sm flex flex-col items-center sm:items-start transition-colors`}>
                          <p className={`${isLight ? tData.text.replace('400', '600') : tData.text} text-[10px] sm:text-xs font-bold uppercase tracking-widest mb-1 sm:mb-2`}>{config.teamNames[idx]}</p>
                          <div className="flex items-end gap-4">
-                           <p className={`text-3xl sm:text-4xl font-orbitron font-black ${textMain}`}>{scores[`t${tId}`]}</p>
+                           <p className={`text-3xl sm:text-4xl font-space font-black ${textMain}`}>{scores[`t${tId}`]}</p>
                            <div className="flex gap-1 mb-2">
                              {Array.from({length: config.targetWins}).map((_, i) => (
                                <Trophy key={i} size={14} className={i < teamWins[`t${tId}`] ? tData.text : 'text-slate-500 opacity-30'} />
@@ -1067,12 +1070,12 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                  <div className={`w-full ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900/50 border-white/10'} rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row justify-around items-center gap-8 mb-12 backdrop-blur-md transition-colors`}>
                     <div className="text-center">
                       <p className={`${textMuted} text-xs font-bold uppercase tracking-widest mb-2`}>Total Links</p>
-                      <p className="text-4xl font-orbitron font-black text-cyan-500 dark:text-cyan-400">{Math.max(0, wordChain.length - 1)}</p>
+                      <p className="text-4xl font-space font-black text-cyan-500 dark:text-cyan-400">{Math.max(0, wordChain.length - 1)}</p>
                     </div>
                     <div className={`w-px h-16 ${isLight ? 'bg-slate-200' : 'bg-white/10'} hidden sm:block`}></div>
                     <div className="text-center">
                       <p className={`${textMuted} text-xs font-bold uppercase tracking-widest mb-2`}>Longest Word</p>
-                      <p className="text-2xl sm:text-3xl font-orbitron font-black text-pink-500 dark:text-pink-400 uppercase tracking-wider">{longestWord || 'N/A'}</p>
+                      <p className="text-2xl sm:text-3xl font-space font-black text-pink-500 dark:text-pink-400 uppercase tracking-wider">{longestWord || 'N/A'}</p>
                       <p className={`${textMuted} text-xs mt-1`}>{longestWord.length} Letters</p>
                     </div>
                  </div>
@@ -1087,14 +1090,14 @@ export function NeonChain({ onViewChange }: { onViewChange: (view: ViewState) =>
                    {!hasGrandChampion && (
                      <button 
                        onClick={continueGame}
-                       className={`px-8 py-4 ${isLight ? 'bg-cyan-500 text-white hover:bg-cyan-600 shadow-lg shadow-cyan-500/30' : 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-[0_0_30px_-5px_rgba(34,211,238,0.5)]'} font-orbitron font-black rounded-2xl transition-all hover:scale-105 active:scale-95 text-sm sm:text-lg flex items-center justify-center`}
+                       className={`px-8 py-4 ${isLight ? 'bg-cyan-500 text-white hover:bg-cyan-600 shadow-lg shadow-cyan-500/30' : 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-[0_0_30px_-5px_rgba(34,211,238,0.5)]'} font-space font-black rounded-2xl transition-all hover:scale-105 active:scale-95 text-sm sm:text-lg flex items-center justify-center`}
                      >
                        <Play size={24} className="mr-3" /> CONTINUE CHAIN
                      </button>
                    )}
                    <button 
                      onClick={startGame}
-                     className={`px-8 sm:px-12 py-4 ${isLight ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-xl' : 'bg-white text-[#050816] hover:bg-slate-200 shadow-[0_0_30px_-5px_rgba(255,255,255,0.4)]'} font-orbitron font-black rounded-2xl transition-all hover:scale-105 active:scale-95 text-sm sm:text-lg flex items-center justify-center`}
+                     className={`px-8 sm:px-12 py-4 ${isLight ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-xl' : 'bg-white text-[#050816] hover:bg-slate-200 shadow-[0_0_30px_-5px_rgba(255,255,255,0.4)]'} font-space font-black rounded-2xl transition-all hover:scale-105 active:scale-95 text-sm sm:text-lg flex items-center justify-center`}
                    >
                      <RotateCcw size={24} className="mr-3" /> REBOOT
                    </button>

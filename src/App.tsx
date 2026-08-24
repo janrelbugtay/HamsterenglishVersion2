@@ -26,6 +26,7 @@ import { HamsterPopQuiz } from "./views/HamsterPopQuiz";
 import { StudentRace } from "./views/StudentRace";
 import { LetterLock } from "./views/LetterLock";
 import { TicTacToe } from "./views/TicTacToe";
+import { Homework } from "./views/Homework";
 import { useAuth } from "./contexts/AuthContext";
 import { doc, onSnapshot, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
@@ -76,8 +77,8 @@ export default function App() {
   }, []);
 
   const renderView = () => {
-    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo", "tic-tac-toe"];
-    if (!user && !publicViews.includes(currentView)) {
+    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo", "tic-tac-toe", "homework"];
+    if ((!user || user.isAnonymous) && !publicViews.includes(currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-4">
           <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-700 text-center max-w-md w-full">
@@ -146,6 +147,8 @@ export default function App() {
         return <LetterLock />;
       case "tic-tac-toe":
         return <TicTacToe onViewChange={handleViewChange} initialJoinData={joinData} />;
+      case "homework":
+        return <Homework onViewChange={handleViewChange} />;
       case "dashboard":
         return <UserDashboard />;
       case "public-dashboard":
