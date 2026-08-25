@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
-import { ArrowLeft, Edit3, Trash2, Save, Play, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Save, Play, Plus, Sparkles, ClipboardList, Check, Info, Layers } from "lucide-react";
 import { collection, query, where, getDocs, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -255,6 +255,58 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
   );
 }
 
+function parsePastedSentences(rawText: string, mode: 'word' | 'anagram' = 'word'): string[] {
+  if (!rawText || !rawText.trim()) return [];
+
+  const text = rawText.trim();
+  let items: string[] = [];
+
+  // 1. Check if text contains explicit newlines
+  if (text.includes('\n') || text.includes('\r')) {
+    items = text.split(/\r?\n/);
+  }
+  // 2. Check if numbered list on a single or unformatted line, e.g. "1. First sentence 2. Second sentence 3. Third sentence" or "1) Apple 2) Banana"
+  else if (/(?:^|\s+)(?:\d+[\.\)\:\-]|\[\d+\])\s+/.test(text)) {
+    const splitByNumbers = text.split(/(?:^|\s+)(?:\d+[\.\)\:\-]|\[\d+\])\s+/).filter(Boolean);
+    if (splitByNumbers.length > 1) {
+      items = splitByNumbers;
+    }
+  }
+
+  // 3. If still 1 item, evaluate mode and delimiters
+  if (items.length <= 1) {
+    if (mode === 'anagram') {
+      // In anagram (word/phrase) mode, check comma, semicolon, tab
+      if (text.includes(',') || text.includes(';') || text.includes('\t')) {
+        items = text.split(/[,;\t]/);
+      }
+    } else {
+      // In sentence mode:
+      if (text.includes(';') || text.includes('\t')) {
+        items = text.split(/[;\t]/);
+      } else {
+        // Match sentences ending in . ! ? followed by whitespace and a capital letter or end of string
+        const sentenceMatches = text.match(/[^.!?]+[.!?]+(?=(?:\s+[A-Z0-9"'])|$)|[^.!?]+$/g);
+        if (sentenceMatches && sentenceMatches.length > 1) {
+          items = sentenceMatches;
+        }
+      }
+    }
+  }
+
+  // Clean each item: remove leading numberings/bullets, trim extra whitespace
+  const cleaned = (items.length > 0 ? items : [text])
+    .map(item => {
+      let s = item.trim();
+      // Remove leading numbering like "1. ", "1) ", "1- ", "[1] ", "• ", "- ", "* ", "1: "
+      s = s.replace(/^(?:\d+[\.\)\:\-]\s*|\[\d+\]\s*|[\-\*\•\–\—\>]\s*)+/g, '').trim();
+      return s;
+    })
+    .filter(s => s.length > 0);
+
+  return cleaned;
+}
+
 function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSave: (g: GameData) => void, onCancel: () => void, folders: { id: string; name: string }[] }) {
   const [folderId, setFolderId] = useState(game.folderId || "");
   const [topic, setTopic] = useState(game.topic || "");
@@ -262,7 +314,10 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
   const [mode, setMode] = useState<'word' | 'anagram'>(game.mode || 'word');
   const [sentences, setSentences] = useState<Sentence[]>(game.sentences);
   const [errorMsg, setErrorMsg] = useState("");
+  const [toastMsg, setToastMsg] = useState("");
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   const addSentence = () => {
     setSentences([...sentences, { id: Date.now(), text: '', emoji: '✨', diff: 1 }]);
@@ -290,13 +345,92 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
         setTimeout(() => {
           const nextInput = document.getElementById(`sentence-input-${index + 1}`);
           nextInput?.focus();
-        }, 50); // slight delay to allow React to render the new input
+        }, 50);
       } else {
         // Just focus the next input
         const nextInput = document.getElementById(`sentence-input-${index + 1}`);
         nextInput?.focus();
       }
     }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (!pastedText) return;
+
+    const parsedItems = parsePastedSentences(pastedText, mode);
+
+    if (parsedItems.length > 1) {
+      e.preventDefault();
+      
+      const newItems: Sentence[] = parsedItems.map((text, i) => ({
+        id: Date.now() + i + Math.random(),
+        text,
+        emoji: '✨',
+        diff: 1,
+      }));
+
+      setSentences(prev => {
+        const updated = [...prev];
+        const current = updated[index];
+
+        if (current && !current.text.trim()) {
+          // If current slot is empty, replace it with the first parsed item and insert the rest
+          updated.splice(index, 1, ...newItems);
+        } else {
+          // If current slot has text, insert new items right after this slot
+          updated.splice(index + 1, 0, ...newItems);
+        }
+        return updated;
+      });
+
+      setToastMsg(`✨ Automatically divided into ${parsedItems.length} numbered ${mode === 'anagram' ? 'words' : 'sentences'}!`);
+      setTimeout(() => setToastMsg(""), 3500);
+
+      // Focus the last inserted element
+      setTimeout(() => {
+        const targetIdx = index + parsedItems.length - (sentences[index]?.text.trim() ? 0 : 1);
+        const targetInput = document.getElementById(`sentence-input-${targetIdx}`);
+        targetInput?.focus();
+      }, 80);
+    } else if (parsedItems.length === 1 && parsedItems[0] !== pastedText) {
+      // If single item with leading numbers/bullets stripped, replace cleanly
+      e.preventDefault();
+      updateSentence(sentences[index].id, 'text', parsedItems[0]);
+    }
+  };
+
+  const handleApplyBulkPaste = (action: 'replace' | 'append') => {
+    const parsed = parsePastedSentences(bulkText, mode);
+    if (parsed.length === 0) {
+      setErrorMsg("Please enter or paste at least one item.");
+      setTimeout(() => setErrorMsg(""), 3000);
+      return;
+    }
+
+    const newItems: Sentence[] = parsed.map((text, i) => ({
+      id: Date.now() + i + Math.random(),
+      text,
+      emoji: '✨',
+      diff: 1,
+    }));
+
+    if (action === 'replace') {
+      setSentences(newItems);
+    } else {
+      setSentences(prev => {
+        // If the only element in prev is empty, replace it
+        if (prev.length === 1 && !prev[0].text.trim()) {
+          return newItems;
+        }
+        return [...prev, ...newItems];
+      });
+    }
+
+    setToastMsg(`✨ Added ${parsed.length} numbered ${mode === 'anagram' ? 'words' : 'sentences'}!`);
+    setTimeout(() => setToastMsg(""), 3500);
+    setShowBulkPasteModal(false);
+    setBulkText("");
   };
 
   const initiateSave = () => {
@@ -325,10 +459,98 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
     });
   };
 
+  const previewBulkItems = parsePastedSentences(bulkText, mode);
+
   return (
     <div className="absolute inset-0 z-40 bg-slate-50 dark:bg-slate-900 overflow-y-auto custom-scrollbar pt-20">
       <div className="w-full min-h-full flex flex-col items-center pb-8 px-4">
       <div className="w-full max-w-4xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl rounded-3xl overflow-hidden flex flex-col shadow-2xl mb-8 border border-white/20 dark:border-white/10">
+        
+        {/* Bulk Paste Modal */}
+        {showBulkPasteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl flex flex-col gap-5 transform scale-100 animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center font-bold">
+                    <ClipboardList size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">
+                      Bulk Paste & Auto-Divide
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Paste multiple sentences, numbered lists, or words. They will be divided into separate numbers.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setShowBulkPasteModal(false); setBulkText(""); }}
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Paste Text Below (Supports multi-line, 1. 2. 3., bullet points, or paragraphs)
+                </label>
+                <textarea 
+                  rows={6}
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  placeholder={mode === 'anagram' 
+                    ? "Example:\n1. Elephant\n2. Crocodile\n3. Butterfly\n4. Kangaroo"
+                    : "Example:\n1. The cat sleeps on the soft sofa.\n2. She reads a fascinating book every evening.\n3. Where are you going for summer vacation?"
+                  }
+                  className="w-full text-sm font-medium bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-white p-4 rounded-2xl focus:border-cyan-500 transition-colors custom-scrollbar"
+                />
+              </div>
+
+              {/* Live division preview */}
+              {previewBulkItems.length > 0 && (
+                <div className="flex flex-col gap-2 bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles size={14} /> Live Preview ({previewBulkItems.length} {mode === 'anagram' ? 'words' : 'sentences'} detected)
+                    </span>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {previewBulkItems.map((item, i) => (
+                      <div key={i} className="flex items-start gap-2.5 text-xs bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-bold flex items-center justify-center shrink-0 text-[11px]">
+                          {i + 1}
+                        </span>
+                        <span className="text-slate-700 dark:text-slate-200 font-medium break-words flex-1">
+                          {item}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 mt-2">
+                <button
+                  onClick={() => handleApplyBulkPaste('replace')}
+                  disabled={previewBulkItems.length === 0}
+                  className="flex-1 py-3.5 px-4 rounded-xl font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Check size={18} /> Replace All List ({previewBulkItems.length})
+                </button>
+                <button
+                  onClick={() => handleApplyBulkPaste('append')}
+                  disabled={previewBulkItems.length === 0}
+                  className="flex-1 py-3.5 px-4 rounded-xl font-bold text-slate-800 dark:text-white bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Plus size={18} /> Append to List ({previewBulkItems.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showPublishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col gap-6 transform scale-100 animate-in fade-in zoom-in duration-200">
@@ -426,9 +648,34 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
           </div>
         )}
 
+        {toastMsg && (
+          <div className="bg-cyan-500/20 text-cyan-500 dark:text-cyan-300 p-3 mx-6 mt-6 rounded-xl font-bold text-center border border-cyan-500/30 animate-in fade-in slide-in-from-top-2 duration-300 flex items-center justify-center gap-2 shadow-sm">
+            <Sparkles size={18} /> {toastMsg}
+          </div>
+        )}
+
         <div className="p-6 flex flex-col gap-6 bg-slate-100 dark:bg-slate-900/50">
+          
+          {/* Smart Tip Bar */}
+          <div className="bg-cyan-500/10 dark:bg-cyan-950/30 border border-cyan-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-cyan-900 dark:text-cyan-200">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center shrink-0 font-bold">
+                <Info size={18} />
+              </div>
+              <p className="text-xs sm:text-sm font-medium">
+                <span className="font-bold">Smart Paste:</span> Paste multiple lines or numbered lists directly into any box below — they will automatically divide into numbered items!
+              </p>
+            </div>
+            <button
+              onClick={() => setShowBulkPasteModal(true)}
+              className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer self-end sm:self-auto"
+            >
+              <ClipboardList size={14} /> Bulk Paste Modal
+            </button>
+          </div>
+
           {sentences.map((s, index) => (
-            <div key={s.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-300 dark:border-slate-700 shadow-sm relative group">
+            <div key={s.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-300 dark:border-slate-700 shadow-sm relative group transition-all hover:border-cyan-400/50">
               <button 
                 onClick={() => removeSentence(s.id)}
                 className="absolute -right-3 -top-3 w-8 h-8 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white border-2 border-white dark:border-slate-800 cursor-pointer z-10"
@@ -446,19 +693,30 @@ function GameEditor({ game, onSave, onCancel, folders }: { game: GameData, onSav
                   value={s.text}
                   onChange={(e) => updateSentence(s.id, 'text', e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
-                  placeholder={mode === 'anagram' ? "Type a word or short phrase..." : "Type your sentence here..."}
-                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 text-slate-800 dark:text-white font-medium"
+                  onPaste={(e) => handlePaste(e, index)}
+                  placeholder={mode === 'anagram' ? "Type or paste words here..." : "Type or paste your sentences here..."}
+                  className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 text-slate-800 dark:text-white font-medium transition-colors"
                 />
               </div>
             </div>
           ))}
           
-          <button 
-            onClick={addSentence}
-            className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Plus size={20} /> {mode === 'anagram' ? "Add Another Word/Phrase" : "Add Another Sentence"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button 
+              onClick={addSentence}
+              className="flex-1 py-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Plus size={20} /> {mode === 'anagram' ? "Add Another Word/Phrase" : "Add Another Sentence"}
+            </button>
+
+            <button 
+              onClick={() => setShowBulkPasteModal(true)}
+              className="sm:w-64 py-4 border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-2xl text-cyan-600 dark:text-cyan-400 font-bold hover:bg-cyan-50 dark:hover:bg-slate-700/80 hover:border-cyan-300 dark:hover:border-cyan-600 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            >
+              <ClipboardList size={20} /> Paste Multiple List
+            </button>
+          </div>
+
         </div>
       </div>
       </div>

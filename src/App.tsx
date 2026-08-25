@@ -38,10 +38,22 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [initialRoomCode, setInitialRoomCode] = useState<string>('');
   const [joinData, setJoinData] = useState<{code: string, nickname: string, gameType: string} | null>(null);
   const { user, loading, isAuthenticating, authError } = useAuth();
   
   const isAdmin = Boolean(user && !user.isAnonymous && user.email?.toLowerCase().trim() === "janrelbugtay03@gmail.com");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('joinCode');
+    if (code) {
+      setInitialRoomCode(code);
+      setIsAuthModalOpen(true);
+      // Remove it from URL so refreshing doesn't keep triggering it
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const handleViewChange = (view: ViewState, data?: any) => {
     if (view === "admin-dashboard" && !isAdmin) {
@@ -182,6 +194,7 @@ export default function App() {
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-200 overflow-hidden">
       <AuthSliderModal 
         isOpen={isAuthModalOpen} 
+        initialRoomCode={initialRoomCode}
         onClose={() => setIsAuthModalOpen(false)} 
         onJoinRoom={(code, name, type) => {
           setJoinData({code, nickname: name, gameType: type});

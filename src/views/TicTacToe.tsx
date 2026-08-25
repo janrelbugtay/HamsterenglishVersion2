@@ -141,7 +141,8 @@ const NetworkManager = {
             NetworkManager.unsubscribeActions();
             NetworkManager.unsubscribeActions = null;
         }
-        NetworkManager.messageCallback = null;
+        // messageCallback is purposefully NOT nullified here 
+        // to prevent `init` from destroying the host's callback.
     }
 };
 
@@ -605,7 +606,7 @@ const HostLobby = ({ state, dispatch }: { state: any, dispatch: any }) => {
     const teamO = players.filter((p: any) => p.team === 'O');
     
     // Construct the join URL
-    const joinUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const joinUrl = typeof window !== 'undefined' ? `${window.location.origin}?joinCode=${state.roomId}` : '';
 
     return (
         <div className="min-h-screen bg-emerald-100 text-gray-900 flex flex-col font-sans p-8">
@@ -691,13 +692,24 @@ const PlayerApp = ({ roomId, initialNickname }: { roomId: string, initialNicknam
             }
         });
 
-        return () => NetworkManager.cleanup();
+        return () => {
+            NetworkManager.cleanup();
+            NetworkManager.messageCallback = null;
+        };
     }, [roomId, playerId, initialNickname]);
 
     if (!clientState) return <div className="min-h-screen bg-emerald-100 flex items-center justify-center text-gray-900"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div></div>;
 
     const me = clientState.players[playerId];
-    if (!me) return <div className="min-h-screen bg-emerald-100 flex items-center justify-center text-gray-900 font-bold">Connecting to host...</div>;
+    if (!me) {
+        if (clientState.status !== 'LOBBY') {
+            return <div className="min-h-screen bg-emerald-100 flex items-center justify-center text-gray-900 font-bold">Game already in progress! You cannot join right now.</div>;
+        }
+        return <div className="min-h-screen bg-emerald-100 flex items-center justify-center text-gray-900 font-bold flex-col gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-600"></div>
+            Connecting to host...
+        </div>;
+    }
 
     const teamColor = me.team === 'X' ? 'bg-blue-600' : 'bg-red-600';
     const currentQ = clientState.questionQueue[clientState.currentQuestionIndex];
@@ -1209,6 +1221,7 @@ export const TicTacToe = ({ onViewChange, initialJoinData }: { onViewChange: (vi
                         setAppMode(null);
                         dispatch({type: 'RETURN_TO_SETUP'});
                         NetworkManager.cleanup();
+                        NetworkManager.messageCallback = null;
                         onViewChange("games");
                     }}
                     className="flex items-center gap-2 p-2 rounded-full transition-colors backdrop-blur-md border border-gray-800 text-gray-400 hover:text-white bg-gray-900/50 hover:bg-gray-800 shadow-sm"

@@ -6,15 +6,21 @@ import { db, auth } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 
-export function AuthSliderModal({ isOpen, onClose, onJoinRoom }: { isOpen: boolean; onClose: () => void; onJoinRoom?: (code: string, nickname: string, gameType: string) => void }) {
+export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }: { isOpen: boolean; onClose: () => void; onJoinRoom?: (code: string, nickname: string, gameType: string) => void; initialRoomCode?: string }) {
   const { signInWithFacebook, isAuthenticating } = useAuth();
   
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [nickname, setNickname] = useState('');
   const [guestName, setGuestName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (initialRoomCode) {
+      setRoomCode(initialRoomCode);
+    }
+  }, [initialRoomCode]);
 
 
   if (!isOpen) return null;
