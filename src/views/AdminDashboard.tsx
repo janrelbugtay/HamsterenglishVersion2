@@ -3,7 +3,7 @@ import {
   Users, Activity, Search, Bell, 
   Menu, X, Settings, LogOut, Filter, Shield,
   Gamepad2, Monitor, Smartphone, Tablet, Trash2,
-  RefreshCw, CheckCircle2, UserCheck, Sparkles, AlertTriangle
+  RefreshCw, CheckCircle2, UserCheck, User, Sparkles, AlertTriangle
 } from 'lucide-react';
 import { collection, onSnapshot, getDocs, deleteDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from '../lib/firebase';
@@ -110,6 +110,7 @@ const APP_GAMES = [
 
 const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {
   const registeredUsers = users.filter((u: any) => !u.isAnonymous).length;
+  const guestUsers = users.filter((u: any) => u.isAnonymous).length;
 
   return (
     <div className="space-y-6">
@@ -124,6 +125,11 @@ const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames
           title="Registered" value={registeredUsers.toLocaleString()} 
           subtitle="Non-guest accounts"
           icon={UserCheck} colorClass="bg-emerald-500" 
+        />
+        <StatCard 
+          title="Guests" value={guestUsers.toLocaleString()} 
+          subtitle="Anonymous accounts"
+          icon={User} colorClass="bg-amber-500" 
         />
         <StatCard 
           title="Page Visits" value={pageVisits.toLocaleString()} 
@@ -293,7 +299,12 @@ const UsersManagement = ({ users, onSync, isSyncing }: any) => {
                   <div className="flex items-center gap-3">
                     <Avatar src={user.photoURL} alt={user.displayName || user.email} />
                     <div>
-                      <p className="font-semibold text-slate-800 dark:text-slate-200">{user.displayName || 'User'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">{user.displayName || 'User'}</p>
+                        {user.isAnonymous && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-bold tracking-wide uppercase">Guest</span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-slate-400 font-mono truncate max-w-[120px]">{user.uid || user.id}</p>
                     </div>
                   </div>

@@ -7,7 +7,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 
 export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }: { isOpen: boolean; onClose: () => void; onJoinRoom?: (code: string, nickname: string, gameType: string) => void; initialRoomCode?: string }) {
-  const { signInWithFacebook, isAuthenticating } = useAuth();
+  const { signInWithGoogle, isAuthenticating } = useAuth();
   
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [nickname, setNickname] = useState('');
@@ -15,13 +15,13 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }
   const [isJoining, setIsJoining] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showGuestInput, setShowGuestInput] = useState(false);
 
   React.useEffect(() => {
     if (initialRoomCode) {
       setRoomCode(initialRoomCode);
     }
   }, [initialRoomCode]);
-
 
   if (!isOpen) return null;
 
@@ -55,6 +55,10 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }
 
   const handleGuestPlay = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!showGuestInput) {
+      setShowGuestInput(true);
+      return;
+    }
     if (!guestName.trim()) {
       setError('Please enter a display name to play as guest');
       return;
@@ -74,72 +78,128 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }
     }
   };
 
-  const facebookIconHtml = `<svg class="w-6 h-6 shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512" fill="#1877F2"><path d="M279.14 288l14.22-92.66h-88.91v-60.13c0-25.35 12.42-50.06 52.24-50.06h40.42V6.26S260.43 0 225.36 0c-73.22 0-121.08 44.38-121.08 124.72v70.62H22.89V288h81.39v224h100.17V288z"/></svg>`;
-
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 md:p-10 text-center border border-slate-100 dark:border-slate-700"
+            className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-slate-100 dark:border-slate-700"
           >
             {/* Close button */}
             <button 
               onClick={onClose} 
-              className="absolute top-6 right-6 z-50 p-2 bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-full transition-colors"
+              className="absolute top-6 right-6 z-50 p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-200 rounded-full transition-colors cursor-pointer"
             >
-               <X size={20} />
+               <X size={20} strokeWidth={2.5} />
             </button>
 
-            {/* Logo */}
-            <div className="relative mx-auto w-24 h-24 mb-6">
-              <div className="absolute inset-0 bg-brand-purple/20 rounded-3xl animate-ping opacity-50" />
-              <img 
-                src="https://drive.google.com/thumbnail?id=1IrQAzr2JXZjfhDxPhP-MZkFlbF8GfW9n&sz=w1000" 
-                alt="Hamster English Logo" 
-                className="relative w-full h-full rounded-3xl object-cover shadow-lg border-4 border-white dark:border-slate-800 z-10" 
-                referrerPolicy="no-referrer" 
-              />
+            {/* Header Content */}
+            <div className="flex flex-col items-center mb-8">
+              <div className="relative w-24 h-24 mb-5">
+                <div className="absolute inset-0 bg-brand-purple/20 rounded-3xl animate-ping opacity-60" />
+                <img 
+                  src="https://drive.google.com/thumbnail?id=1IrQAzr2JXZjfhDxPhP-MZkFlbF8GfW9n&sz=w1000" 
+                  alt="Hamster English Logo" 
+                  className="relative w-full h-full rounded-3xl object-cover shadow-xl border-4 border-white dark:border-slate-800 z-10" 
+                  referrerPolicy="no-referrer" 
+                />
+              </div>
+              <h2 className="text-3xl font-black text-slate-800 dark:text-white tracking-tight text-center">
+                HamsterEnglish
+              </h2>
+              <p className="text-slate-500 dark:text-slate-400 font-medium text-center mt-2">
+                Choose how you want to play
+              </p>
             </div>
 
-            <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-3 tracking-tight">
-              Hamster English
-            </h2>
-            <p className="text-slate-500 dark:text-slate-400 font-medium mb-8">
-              Choose how you want to play!
-            </p>
+            <div className="flex flex-col gap-6">
+              
+              {/* Top Section: Play as Guest */}
+              <form onSubmit={handleGuestPlay} className="flex flex-col gap-3">
+                <AnimatePresence mode="wait">
+                  {showGuestInput && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <input 
+                        type="text" 
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Enter your display name"
+                        className="w-full p-4 rounded-2xl border-2 border-brand-purple/20 bg-brand-purple/5 font-bold text-center text-slate-800 dark:text-white focus:border-brand-purple focus:ring-4 focus:ring-brand-purple/10 focus:outline-none transition-all placeholder:text-brand-purple/40"
+                        maxLength={15}
+                        autoFocus
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            <div className="flex flex-col gap-4">
+                <button 
+                  type="submit"
+                  disabled={isGuestLoading}
+                  className="w-full flex items-center justify-center gap-3 p-4 bg-gradient-to-br from-brand-purple to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-2xl transition-all shadow-xl shadow-brand-purple/20 hover:shadow-brand-purple/40 hover:-translate-y-1 group cursor-pointer border border-brand-purple/50"
+                >
+                  {isGuestLoading ? (
+                    <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <User size={24} className="group-hover:scale-110 transition-transform" />
+                  )}
+                  <span className="font-bold text-lg tracking-wide">
+                    {isGuestLoading ? "Entering Studio..." : (showGuestInput ? "Start Playing" : "Play as Guest")}
+                  </span>
+                </button>
+              </form>
 
+              {/* Divider */}
+              <div className="relative flex items-center justify-center -my-2">
+                <div className="border-t-2 border-slate-100 dark:border-slate-700/60 w-full"></div>
+                <span className="absolute bg-white dark:bg-slate-800 px-4 text-[11px] text-slate-400 font-bold uppercase tracking-widest rounded-full">
+                  OR
+                </span>
+              </div>
+
+              {/* Middle Section: Google Sign In */}
               <button 
                 onClick={() => { 
-                  signInWithFacebook(); 
+                  signInWithGoogle(); 
                   onClose(); 
                 }} 
                 disabled={isAuthenticating}
-                className="w-full flex items-center justify-center gap-3 p-4 border-2 border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm group"
+                className="w-full flex items-center justify-center gap-3 p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600 transition-all shadow-sm group cursor-pointer"
               >
-                <div dangerouslySetInnerHTML={{ __html: facebookIconHtml }} className="group-hover:scale-110 transition-transform" />
+                <svg className="w-6 h-6 shrink-0 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-lg">
-                  {isAuthenticating ? "Signing In..." : "Sign in with Facebook"}
+                  {isAuthenticating ? "Signing In..." : "Sign in with Google"}
                 </span>
               </button>
 
-              <div className="relative flex items-center justify-center my-2">
-                <div className="border-t-2 border-slate-100 dark:border-slate-700 w-full"></div>
-                <span className="absolute bg-white dark:bg-slate-800 px-4 text-xs text-slate-400 font-bold uppercase tracking-widest">or Join Game</span>
+              {/* Divider */}
+              <div className="relative flex items-center justify-center py-2">
+                <div className="border-t-2 border-slate-100 dark:border-slate-700/60 w-full"></div>
+                <span className="absolute bg-white dark:bg-slate-800 px-4 text-[11px] text-slate-400 font-bold uppercase tracking-widest rounded-full">
+                  Got a Code?
+                </span>
               </div>
 
-              <form onSubmit={handleJoin} className="flex flex-col gap-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700">
+              {/* Bottom Section: Join Room */}
+              <form onSubmit={handleJoin} className="flex flex-col gap-3 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-3xl border-2 border-slate-100 dark:border-slate-700/60 shadow-inner">
                 <input 
                   type="text" 
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value)}
-                  placeholder="Room Code"
-                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-center text-slate-800 dark:text-white uppercase tracking-widest focus:ring-2 focus:ring-brand-purple focus:outline-none"
+                  placeholder="ROOM CODE"
+                  className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-center text-slate-800 dark:text-white uppercase tracking-[0.2em] focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 focus:outline-none transition-all placeholder:text-slate-400 placeholder:tracking-normal"
                   maxLength={6}
                 />
                 <input 
@@ -147,49 +207,29 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="Your Name"
-                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-center text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-purple focus:outline-none"
+                  className="w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-center text-slate-800 dark:text-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 focus:outline-none transition-all"
                   maxLength={15}
                 />
-                {error && <p className="text-red-500 font-medium text-sm">{error}</p>}
+                
+                {error && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }}
+                    className="text-red-500 font-bold text-sm text-center bg-red-50 dark:bg-red-900/20 py-2 rounded-lg mt-1"
+                  >
+                    {error}
+                  </motion.p>
+                )}
+
                 <button 
                   type="submit"
                   disabled={isJoining}
-                  className="w-full flex items-center justify-center gap-2 p-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold transition-all hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-70"
+                  className="w-full flex items-center justify-center gap-2 p-3.5 mt-2 bg-slate-800 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl font-bold transition-all hover:bg-slate-900 dark:hover:bg-white hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-70 disabled:hover:translate-y-0 cursor-pointer"
                 >
                   {isJoining ? <Loader2 className="animate-spin" size={20} /> : <ArrowRight size={20} />}
-                  <span>Join Room</span>
+                  <span className="tracking-wide">Join Room</span>
                 </button>
               </form>
 
-              <div className="relative flex items-center justify-center my-2">
-                <div className="border-t-2 border-slate-100 dark:border-slate-700 w-full"></div>
-                <span className="absolute bg-white dark:bg-slate-800 px-4 text-xs text-slate-400 font-bold uppercase tracking-widest">or</span>
-              </div>
-
-              <form onSubmit={handleGuestPlay} className="flex flex-col gap-3">
-                <input 
-                  type="text" 
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Your Display Name"
-                  className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold text-center text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-purple focus:outline-none"
-                  maxLength={15}
-                />
-                <button 
-                  type="submit"
-                  disabled={isGuestLoading}
-                  className="w-full flex items-center justify-center gap-3 p-4 bg-brand-purple hover:bg-purple-600 text-white rounded-2xl transition-all shadow-lg shadow-purple-200 dark:shadow-none hover:-translate-y-1 hover:shadow-xl group"
-                >
-                  {isGuestLoading ? (
-                    <Loader2 className="animate-spin" size={24} />
-                  ) : (
-                    <User size={24} className="group-hover:scale-110 transition-transform" />
-                  )}
-                  <span className="font-bold text-lg">
-                    {isGuestLoading ? "Joining..." : "Play as Guest"}
-                  </span>
-                </button>
-              </form>
             </div>
           </motion.div>
         </div>
