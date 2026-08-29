@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Play, Users, Clock } from "lucide-react";
+import { Play, Users, Clock, PlusCircle } from "lucide-react";
 import { Game, ViewState } from "../types";
 import { cn } from "../lib/utils";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -9,11 +9,42 @@ import { useAuth } from "../contexts/AuthContext";
 
 export function Home({
   onViewChange,
+  openAuthModal,
 }: {
   onViewChange?: (view: ViewState) => void;
+  openAuthModal?: () => void;
 }) {
+  const { user } = useAuth();
+
+  const handleCreateGameClick = () => {
+    if (!user || user.isAnonymous) {
+      if (openAuthModal) openAuthModal();
+    } else {
+      if (onViewChange) onViewChange("games");
+    }
+  };
+
   return (
-    <div className="w-full max-w-5xl mx-auto">
+    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
+      {/* Top Banner / Action Bar */}
+      <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 dark:text-white">
+            Welcome to the Studio
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            Play, create, and share amazing learning games
+          </p>
+        </div>
+        <button 
+          onClick={handleCreateGameClick}
+          className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-brand-purple to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-2xl font-bold shadow-xl shadow-brand-purple/20 dark:shadow-none hover:-translate-y-1 transition-all group"
+        >
+          <PlusCircle size={22} className="group-hover:rotate-90 transition-transform duration-300" />
+          <span className="hidden sm:inline">Create a Game</span>
+        </button>
+      </div>
+
       <FeaturedGamesSection onViewChange={onViewChange} />
     </div>
   );

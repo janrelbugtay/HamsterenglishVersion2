@@ -126,11 +126,11 @@ export default function App() {
 
     switch (currentView) {
       case "home":
-        return <Home onViewChange={handleViewChange} />;
+        return <Home onViewChange={handleViewChange} openAuthModal={() => setIsAuthModalOpen(true)} />;
       case "generator":
         return <AIGenerator />;
       case "admin-dashboard":
-        return isAdmin ? <AdminDashboard onViewChange={handleViewChange} /> : <Home onViewChange={handleViewChange} />;
+        return isAdmin ? <AdminDashboard onViewChange={handleViewChange} /> : <Home onViewChange={handleViewChange} openAuthModal={() => setIsAuthModalOpen(true)} />;
       case "user-dashboard":
         return <UserDashboard />;
       case "media-studio":
@@ -186,7 +186,7 @@ export default function App() {
           </div>
         );
       default:
-        return <Home />;
+        return <Home onViewChange={handleViewChange} openAuthModal={() => setIsAuthModalOpen(true)} />;
     }
   };
 
