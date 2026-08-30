@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<body>
+<input id="inp" type="range" oninput="Settings.update('volume', this.value)">
+<script>
+var Settings = {
+    update(k, v) {
+        console.log("Updated", k, v);
+    }
+};
+</script>
+</body>
+</html>

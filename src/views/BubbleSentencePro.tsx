@@ -222,19 +222,9 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
       )}
 
       {screen === 'game' && (
-        <div className="absolute inset-0 z-50 flex flex-col bg-white">
-            <div className="p-4 bg-white border-b flex items-center shadow-sm z-10 shrink-0">
-                <button
-                    onClick={() => setScreen('setup')}
-                    className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold transition-colors cursor-pointer"
-                >
-                    <ArrowLeft className="w-5 h-5" />
-                    Exit Game
-                </button>
-                <h1 className="ml-4 font-black text-xl text-slate-800">
-                    Bubble Island
-                </h1>
-                <div className="ml-auto flex items-center"><FullscreenButton targetId="game-container" /></div>
+        <div className="absolute inset-0 z-50 flex flex-col bg-white" id="game-container">
+            <div className="absolute top-4 right-4 z-10">
+                <FullscreenButton targetId="game-container" />
             </div>
             <iframe
                 ref={iframeRef}

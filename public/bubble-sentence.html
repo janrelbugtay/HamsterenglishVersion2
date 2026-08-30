@@ -458,28 +458,7 @@ window.onunhandledrejection = function(event) {
                     </div>
                 </div>
 
-                <!-- Settings Panel -->
-                <div class="bg-gray-50 rounded-3xl p-4 md:p-6 border-2 border-gray-200 mb-6 flex flex-col gap-4 text-left shadow-inner">
-                    <div class="flex justify-between items-center bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <span class="font-bold text-lg md:text-xl text-gray-700 flex items-center gap-2"><span>🎵</span> Sound Effects</span>
-                        <button id="sound-toggle-btn" onclick="window.toggleSound()" class="text-2xl md:text-3xl bg-gray-100 rounded-full shadow-inner border border-gray-200 hover:bg-gray-200 transition-colors w-14 h-14 flex items-center justify-center">🔊</button>
-                    </div>
-                    
-                    <div class="flex flex-col gap-2 bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <span class="font-bold text-lg md:text-xl text-gray-700 flex items-center gap-2"><span>⏱️</span> Response Time</span>
-                        <div class="relative">
-                            <select id="lobby-timer-select" class="p-3 rounded-xl border-2 border-gray-200 font-bold text-gray-700 text-lg focus:border-blue-500 outline-none w-full bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer appearance-none shadow-inner" style="text-align-last: center;">
-                                <option value="default">Category Default</option>
-                                <option value="30">30 Seconds</option>
-                                <option value="60">1 Minute</option>
-                                <option value="120">2 Minutes</option>
-                            </select>
-                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700">
-                                <svg class="fill-current h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
             </div>
             
             <button onclick="Game.startGameFromLobby()" class="btn-premium green w-full py-4 text-2xl font-black shadow-lg shrink-0 mt-4 z-10 relative">🚀 START GAME</button>
@@ -493,24 +472,24 @@ window.onunhandledrejection = function(event) {
         <!-- Top Bar -->
         <div class="absolute top-0 left-0 w-full p-4 z-30 pointer-events-none">
             <!-- Right Controls (Lesson Status) -->
-            <div class="absolute top-4 right-4 flex flex-col gap-2 pointer-events-auto">
+            <div class="absolute top-4 right-20 flex flex-col gap-2 pointer-events-auto">
                 <div class="bg-blue-900/40 backdrop-blur-md text-white font-black text-xl px-6 py-2 rounded-full shadow-lg border border-white/30 tracking-wide lesson-status-container" id="ui-lesson-status">1 / 5</div>
             </div>
 
             <!-- Left Controls -->
-            <div class="absolute top-4 left-4 flex flex-col gap-2 pointer-events-auto">
-                <button onclick="Game.quitGame()" class="btn-premium quit-btn bg-gradient-to-b from-gray-200 to-gray-300 text-gray-700 border-gray-100 px-6 py-3 text-lg shadow-[0_10px_0_#9ca3af,0_15px_20px_rgba(0,0,0,0.2)] flex items-center gap-2"><span>⏸ Quit</span></button>
-                
+            <div class="absolute top-4 left-4 flex flex-row gap-2 pointer-events-auto">
+                <button onclick="Game.quitGame()" class="btn-premium quit-btn bg-gradient-to-b from-gray-200 to-gray-300 text-gray-700 border-gray-100 px-6 py-3 text-lg shadow-[0_10px_0_#9ca3af,0_15px_20px_rgba(0,0,0,0.2)] flex items-center gap-2"><span>🔙 Menu</span></button>
+                <button onclick="Game.pauseGame()" class="btn-premium quit-btn bg-gradient-to-b from-blue-200 to-blue-300 text-blue-700 border-blue-100 px-6 py-3 text-lg shadow-[0_10px_0_#93c5fd,0_15px_20px_rgba(0,0,0,0.2)] flex items-center gap-2"><span>⚙️ Settings</span></button>
             </div>
             
             <!-- Teams and Timer Wrapper -->
-            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-6 pointer-events-auto w-full justify-center max-w-full px-4 overflow-x-auto" style="scrollbar-width: none;">
-                <div id="teams-container" class="flex items-center gap-4">
+            <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-6 pointer-events-none w-full justify-center max-w-full px-4 overflow-x-auto" style="scrollbar-width: none;">
+                <div id="teams-container" class="flex items-center gap-4 pointer-events-auto">
                     <!-- Teams injected here -->
                 </div>
                 
                 <!-- Circular Timer -->
-                <div class="relative w-24 h-24 flex items-center justify-center shrink-0" id="timer-container">
+                <div class="relative w-24 h-24 flex items-center justify-center shrink-0 pointer-events-auto" id="timer-container">
                     <svg class="absolute inset-0 w-full h-full drop-shadow-md" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.8)" stroke="#e5e7eb" stroke-width="8"/>
                         <circle id="ui-timer-ring" cx="50" cy="50" r="45" fill="none" stroke="#4ade80" stroke-width="8" class="timer-ring-circle" stroke-dasharray="283" stroke-dashoffset="0"/>
@@ -540,7 +519,7 @@ window.onunhandledrejection = function(event) {
         </div>
 
         <!-- Physics Area -->
-        <div id="physics-area" class="absolute top-24 left-0 w-full z-20 overflow-visible pointer-events-none" style="bottom: 320px;"></div>
+        <div id="physics-area" class="absolute top-24 left-0 w-full z-20 overflow-visible" style="bottom: 320px;"></div>
     </div>
 
     <div id="screen-win" class="screen bg-black/60 backdrop-blur-md justify-center items-center z-40">
@@ -683,7 +662,7 @@ window.onunhandledrejection = function(event) {
                         <span>Bubble Speed</span>
                         <span id="ui-speed-val">1x</span>
                     </label>
-                    <input type="range" id="setting-speed" min="0.5" max="3" step="0.5" class="w-full" oninput="Settings.update('bubbleSpeed', this.value); document.getElementById('ui-speed-val').innerText=this.value+'x'">
+                    <input type="range" id="setting-speed" min="1" max="10" step="1" class="w-full" oninput="Settings.update('bubbleSpeed', this.value); document.getElementById('ui-speed-val').innerText=this.value+'x'">
                 </div>
                 
                 <!-- Size -->
@@ -695,11 +674,36 @@ window.onunhandledrejection = function(event) {
                     <input type="range" id="setting-size" min="0.5" max="2" step="0.25" class="w-full" oninput="Settings.update('bubbleSize', this.value); document.getElementById('ui-size-val').innerText=this.value+'x'">
                 </div>
 
+                <!-- Twisted Mode -->
+                <div class="flex items-center justify-between">
+                    <label class="font-bold text-gray-700">Twisted Mode</label>
+                    <input type="checkbox" id="setting-twisted" class="w-6 h-6" onchange="Settings.update('twistedEnabled', this.checked)">
+                </div>
+
                 <!-- Timer -->
                 <div class="flex items-center justify-between">
                     <label class="font-bold text-gray-700">Timer Enabled</label>
                     <input type="checkbox" id="setting-timer" class="w-6 h-6" onchange="Settings.update('timerEnabled', this.checked)">
                 </div>
+
+                <!-- Sound Effects -->
+                <div class="flex items-center justify-between">
+                    <label class="font-bold text-gray-700">Sound Effects</label>
+                    <input type="checkbox" id="setting-sound-effects" class="w-6 h-6" onchange="Settings.update('soundEffects', this.checked)">
+                </div>
+
+                <!-- Response Time -->
+                <div class="flex items-center justify-between">
+                    <label class="font-bold text-gray-700">Response Time</label>
+                    <select id="setting-response-time" class="p-2 rounded-lg border-2 border-gray-200 font-bold text-gray-700 focus:border-blue-500 outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onchange="Settings.update('responseTime', this.value)">
+                        <option value="default">Default</option>
+                        <option value="30">30s</option>
+                        <option value="60">1m</option>
+                        <option value="120">2m</option>
+                        <option value="300">5m</option>
+                    </select>
+                </div>
+
 
                 <!-- Theme -->
                 <div class="flex items-center justify-between">
@@ -739,7 +743,7 @@ window.onunhandledrejection = function(event) {
                         <span>Bubble Speed</span>
                         <span id="ui-speed-val-pause">1x</span>
                     </label>
-                    <input type="range" id="setting-speed-pause" min="0.5" max="3" step="0.5" class="w-full" oninput="Settings.update('bubbleSpeed', this.value); document.getElementById('ui-speed-val-pause').innerText=this.value+'x'">
+                    <input type="range" id="setting-speed-pause" min="1" max="10" step="1" class="w-full" oninput="Settings.update('bubbleSpeed', this.value); document.getElementById('ui-speed-val-pause').innerText=this.value+'x'">
                 </div>
                 
                 <!-- Size -->
@@ -750,12 +754,37 @@ window.onunhandledrejection = function(event) {
                     </label>
                     <input type="range" id="setting-size-pause" min="0.5" max="2" step="0.25" class="w-full" oninput="Settings.update('bubbleSize', this.value); document.getElementById('ui-size-val-pause').innerText=this.value+'x'">
                 </div>
+
+                <!-- Twisted Mode -->
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-bold text-gray-500">Twisted Mode</label>
+                    <input type="checkbox" id="setting-twisted-pause" class="w-6 h-6" onchange="Settings.update('twistedEnabled', this.checked)">
+                </div>
                 
                 <!-- Timer -->
                 <div class="flex items-center justify-between">
                     <label class="text-sm font-bold text-gray-500">Enable Timer</label>
                     <input type="checkbox" id="setting-timer-pause" class="w-6 h-6" onchange="Settings.update('timerEnabled', this.checked)">
                 </div>
+
+                <!-- Sound Effects -->
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-bold text-gray-500">Sound Effects</label>
+                    <input type="checkbox" id="setting-sound-effects-pause" class="w-6 h-6" onchange="Settings.update('soundEffects', this.checked)">
+                </div>
+
+                <!-- Response Time -->
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-bold text-gray-500">Response Time</label>
+                    <select id="setting-response-time-pause" class="p-1 rounded-lg border border-gray-200 font-bold text-gray-500 text-sm focus:border-blue-500 outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer" onchange="Settings.update('responseTime', this.value)">
+                        <option value="default">Default</option>
+                        <option value="30">30s</option>
+                        <option value="60">1m</option>
+                        <option value="120">2m</option>
+                        <option value="300">5m</option>
+                    </select>
+                </div>
+
             </div>
             
             <button onclick="Game.resumeGame()" class="w-full mt-8 btn-premium green py-3 text-2xl font-black shadow-lg">▶ RESUME</button>
@@ -778,7 +807,7 @@ window.onunhandledrejection = function(event) {
         /** BUBBLE SENTENCE FORMATION PRO - Premium Engine */
 
         // --- Audio Engine (Web Audio API Synthesizer) ---
-        const Audio = {
+var Audio = {
             ctx: null, sfxEnabled: true,
             init() { if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
             toggleSfx(val) { this.sfxEnabled = val; },
@@ -816,7 +845,7 @@ window.onunhandledrejection = function(event) {
         };
 
         // --- Particle System ---
-        const Particles = {
+var Particles = {
             canvas: document.getElementById('particle-canvas'), ctx: null, particles: [], animFrame: null,
             init() {
                 this.canvas = document.getElementById('particle-canvas');
@@ -935,8 +964,8 @@ window.onunhandledrejection = function(event) {
         };
 
         // --- STREAMING_CHUNK:Data & State Management... ---
-        const DefaultData = {
-            profile: { name: "Student", avatar: "🐧", coins: 0, unlockedThemes: ['theme-sky'], currentTheme: 'theme-sky', settings: { volume: 50, bubbleSpeed: 1, bubbleSize: 1, timerEnabled: true, teamsEnabled: false } },
+var DefaultData = {
+            profile: { name: "Student", avatar: "🐧", coins: 0, unlockedThemes: ['theme-sky'], currentTheme: 'theme-sky', settings: { volume: 50, bubbleSpeed: 1, bubbleSize: 1, timerEnabled: true, teamsEnabled: false, twistedEnabled: false } },
             categories: [
                 { id: 'cat_daily', name: 'Daily Habits', icon: '🏡', timer: 60, color: '#60a5fa', x: 20, y: 10 },
                 { id: 'cat_animals', name: 'Wild Animals', icon: '🦁', timer: 45, color: '#4ade80', x: 60, y: 30 },
@@ -953,7 +982,7 @@ window.onunhandledrejection = function(event) {
             progress: {} 
         };
 
-        const Dialog = {
+var Dialog = {
             callback: null,
             alert(msg) {
                 document.getElementById('dialog-title').innerText = 'Attention';
@@ -979,7 +1008,7 @@ window.onunhandledrejection = function(event) {
             }
         };
 
-        const Storage = {
+var Storage = {
             data: null,
             load() {
                 const saved = localStorage.getItem('bubbleGamePro');
@@ -994,7 +1023,8 @@ window.onunhandledrejection = function(event) {
                     if(!this.data.profile) this.data.profile = DefaultData.profile;
                     if(!this.data.profile.unlockedThemes) this.data.profile.unlockedThemes = ['theme-sky'];
                     if(!this.data.profile.currentTheme) this.data.profile.currentTheme = 'theme-sky';
-                    if(!this.data.profile.settings) this.data.profile.settings = { volume: 50, bubbleSpeed: 1, bubbleSize: 1, timerEnabled: true, teamsEnabled: false };
+                    if(!this.data.profile.settings) this.data.profile.settings = { volume: 50, bubbleSpeed: 1, bubbleSize: 1, timerEnabled: true, teamsEnabled: false, twistedEnabled: false };
+                    if(this.data.profile.settings.twistedEnabled === undefined) this.data.profile.settings.twistedEnabled = false;
                     if(!this.data.progress) this.data.progress = {};
                     if(!this.data.categories) this.data.categories = DefaultData.categories;
                     if(!this.data.sentences) this.data.sentences = DefaultData.sentences;
@@ -1011,7 +1041,7 @@ window.onunhandledrejection = function(event) {
             setTheme(t) { this.data.profile.currentTheme = t; document.body.className = t; this.save(); }
         };
 
-                const Settings = {
+var Settings = {
             update(key, val) {
                 if(!Storage.data.profile.settings) Storage.data.profile.settings = { volume: 50, bubbleSpeed: 1, bubbleSize: 1, timerEnabled: true, teamsEnabled: false };
                 if (key === 'volume') {
@@ -1024,8 +1054,19 @@ window.onunhandledrejection = function(event) {
                     document.querySelectorAll('.bubble-word').forEach(b => {
                         b.style.transform = `scale(${parseFloat(val)})`;
                     });
+                } else if (key === 'soundEffects') {
+                    Storage.data.profile.settings.soundEffects = val;
+                    window.isSoundMuted = !val;
+                    if (typeof Audio !== 'undefined' && Audio.toggleSfx) {
+                        Audio.toggleSfx(val);
+                        Audio.sfxEnabled = val;
+                    }
+                } else if (key === 'responseTime') {
+                    Storage.data.profile.settings.responseTime = val;
                 } else if (key === 'timerEnabled') {
                     Storage.data.profile.settings.timerEnabled = val;
+                } else if (key === 'twistedEnabled') {
+                    Storage.data.profile.settings.twistedEnabled = val;
                 } else if (key === 'teamsEnabled') {
                     Storage.data.profile.settings.teamsEnabled = val;
                     Game.toggleClassroomMode(val);
@@ -1048,7 +1089,14 @@ window.onunhandledrejection = function(event) {
                 byText('ui-speed-val', (s.bubbleSpeed || 1) + 'x');
                 byId('setting-size', s.bubbleSize || 1);
                 byText('ui-size-val', (s.bubbleSize || 1) + 'x');
+                byId('setting-twisted', !!s.twistedEnabled, 'checked');
                 byId('setting-timer', s.timerEnabled !== false, 'checked');
+                byId('setting-timer-pause', s.timerEnabled !== false, 'checked');
+                byId('setting-sound-effects', s.soundEffects !== false, 'checked');
+                byId('setting-sound-effects-pause', s.soundEffects !== false, 'checked');
+                byId('setting-response-time', s.responseTime || 'default');
+                byId('setting-response-time-pause', s.responseTime || 'default');
+
                 byId('setting-teams', !!s.teamsEnabled, 'checked');
                 
                 byId('setting-volume-pause', s.volume || 50);
@@ -1057,6 +1105,7 @@ window.onunhandledrejection = function(event) {
                 byText('ui-speed-val-pause', (s.bubbleSpeed || 1) + 'x');
                 byId('setting-size-pause', s.bubbleSize || 1);
                 byText('ui-size-val-pause', (s.bubbleSize || 1) + 'x');
+                byId('setting-twisted-pause', !!s.twistedEnabled, 'checked');
                 byId('setting-timer-pause', s.timerEnabled !== false, 'checked');
                 
                 Game.toggleClassroomMode(!!s.teamsEnabled);
@@ -1064,7 +1113,7 @@ window.onunhandledrejection = function(event) {
             }
         };
 
-        const UI = {
+var UI = {
             updateProfile() {
                 const uiAvatar = document.getElementById('ui-avatar');
                 if (uiAvatar) uiAvatar.innerText = Storage.data.profile.avatar;
@@ -1084,7 +1133,7 @@ window.onunhandledrejection = function(event) {
         };
 
         // --- STREAMING_CHUNK:Gameplay Logic & Physics... ---
-        const Game = {
+var Game = {
             hintsEnabled: true, classroomMode: false,
             isPlaying: false, levelTimeout: null,
             cat: null, sents: [], idx: 0,
@@ -1123,6 +1172,7 @@ window.onunhandledrejection = function(event) {
                 document.getElementById('modal-settings').classList.remove('hidden');
             },
             pauseGame() {
+                Settings.apply(); // ensure it matches current settings
                 this.isPaused = true;
                 document.getElementById('modal-pause').classList.remove('hidden'); document.getElementById('modal-pause').style.display = "flex";
                 clearInterval(this.timerInterval);
@@ -1318,9 +1368,12 @@ window.onunhandledrejection = function(event) {
                 document.getElementById('game-body').style.animation = 'none';
                 ring.style.stroke = '#4ade80'; // Green
                 
-                const lobbyTimer = document.getElementById('lobby-timer-select');
-                if (lobbyTimer && lobbyTimer.value !== 'default') {
-                    seconds = parseInt(lobbyTimer.value);
+                let responseTimeStr = 'default';
+                if(window.Storage && Storage.data && Storage.data.profile && Storage.data.profile.settings) {
+                    responseTimeStr = Storage.data.profile.settings.responseTime || 'default';
+                }
+                if (responseTimeStr !== 'default') {
+                    seconds = parseInt(responseTimeStr);
                 }
                 if(seconds === 0 || !seconds || !timerEnabled) {
                     this.timerTotal = 0; text.innerText = '∞';
@@ -1447,7 +1500,7 @@ window.onunhandledrejection = function(event) {
                         
                         // Jitter tolerance
                         const dist = Math.hypot(e.clientX - this.dragB.startX, e.clientY - this.dragB.startY);
-                        if (dist > 25) {
+                        if (dist > 45) {
                             this.dragB.isClick = false;
                         }
                     }
@@ -1485,30 +1538,34 @@ window.onunhandledrejection = function(event) {
                 const pad = 30; // Generous hit area
                 const wordText = b.wordText;
                 
-                // First check if they dropped it on ANY empty slot
-                for (let slot of this.slots) {
-                    if (slot.filled) continue;
-                    const r = slot.el.getBoundingClientRect();
+                // Only allow dropping on the next available slot in order
+                const nextSlot = this.slots.find(s => !s.filled);
+                if (nextSlot) {
+                    const r = nextSlot.el.getBoundingClientRect();
+                    // Check if dropped near the next available slot
                     if(cx > r.left-pad && cx < r.right+pad && cy > r.top-pad && cy < r.bottom+pad) {
-                        if(wordText === slot.w) {
-                            this.correct(b, slot);
+                        if(wordText === nextSlot.w) {
+                            this.correct(b, nextSlot);
                             return;
                         } else {
-                            this.wrong(b, slot);
+                            this.wrong(b, nextSlot);
                             return; // dropped on wrong slot
+                        }
+                    } else {
+                        // Check if they tried to drop on a DIFFERENT empty slot
+                        for (let slot of this.slots) {
+                            if (slot.filled || slot === nextSlot) continue;
+                            const sr = slot.el.getBoundingClientRect();
+                            if(cx > sr.left-pad && cx < sr.right+pad && cy > sr.top-pad && cy < sr.bottom+pad) {
+                                // Dropped on a slot that is not the next in order
+                                this.wrong(b, slot);
+                                return;
+                            }
                         }
                     }
                 }
-
-                // If they dropped it anywhere else, act like a click and drop into the next available slot
-                const nextI = this.slots.findIndex(s => !s.filled);
-                if (nextI !== -1) {
-                    if (this.slots[nextI].w === wordText) {
-                        this.correct(b, this.slots[nextI]);
-                    } else {
-                        this.wrong(b, this.slots[nextI]);
-                    }
-                }
+                
+                // If dropped in empty space, just do nothing. Let it float.
             },
 
             correct(b, slot) {
@@ -1852,7 +1909,13 @@ window.onunhandledrejection = function(event) {
                                     b.vx += ax; b.vy += ay; b2.vx -= ax; b2.vy -= ay;
                                 }
                             }
-                            rot = b.vx * 3;
+                            
+                            if (Storage.data.profile.settings.twistedEnabled && !this.isFrozen) {
+                                b.twistRot = (b.twistRot || 0) + (1.5 * dt * speedMult);
+                                rot = b.twistRot;
+                            } else {
+                                rot = b.vx * 3;
+                            }
                         }
                         
                         let renderX = b.x;
@@ -1876,7 +1939,7 @@ window.onunhandledrejection = function(event) {
         };
 
         // --- STREAMING_CHUNK:Teacher Dashboard... ---
-        const Editor = {
+var Editor = {
             cCatId: null,
             init() { this.renderCat(); },
             

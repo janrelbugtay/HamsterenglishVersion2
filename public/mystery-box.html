@@ -400,12 +400,12 @@
       let isGenerating = false;
 
       let customQuestions = Array.from({ length: 26 }, (_, i) => ({
-        letter: String.fromCharCode(65 + i),
+        letter: String(i + 1),
         type: "mcq",
-        question: `Sample Question ${String.fromCharCode(65 + i)}`,
-        options: ["Option A", "Option B", "Option C", "Option D"],
+        question: `Sample Question ${String(i + 1)}`,
+        options: ["Option 1", "Option 2", "Option 3", "Option 4"],
         correctOptionIndex: 0,
-        answer: `Sample Answer ${String.fromCharCode(65 + i)}`,
+        answer: `Sample Answer ${String(i + 1)}`,
       }));
 
       let teams = [
@@ -453,7 +453,7 @@
           if (data.questions && data.questions.length === 26) {
             customQuestions = data.questions.map((q, i) => ({
               ...q,
-              letter: String.fromCharCode(65 + i)
+              letter: String(i + 1)
             }));
           } else {
             alert("Failed to generate exactly 26 questions.");
@@ -720,24 +720,9 @@
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
             <div class="flex items-center gap-3">
               <div class="bg-blue-500 text-white w-10 h-10 flex items-center justify-center rounded-full font-black text-xl">
-                ${q.letter}
+                ${idx + 1}
               </div>
               <h3 class="text-lg font-bold text-slate-700">Question Setup</h3>
-            </div>
-            
-            <div class="flex bg-slate-200 rounded-lg p-1">
-              <button
-                onclick="updateQuestionType(${idx}, 'mcq')"
-                class="px-4 py-2 rounded-md text-sm font-bold transition-colors ${q.type === "mcq" ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}"
-              >
-                Multiple Choice
-              </button>
-              <button
-                onclick="updateQuestionType(${idx}, 'fib')"
-                class="px-4 py-2 rounded-md text-sm font-bold transition-colors ${q.type === "fib" ? "bg-white shadow-sm text-slate-800" : "text-slate-500 hover:text-slate-700"}"
-              >
-                Fill in Blanks
-              </button>
             </div>
           </div>
 
@@ -749,9 +734,6 @@
             >${q.question}</textarea>
           </div>
 
-          ${
-            q.type === "mcq"
-              ? `
             <div>
               <label class="block text-sm font-bold text-slate-500 mb-2">Answers (Select the correct option)</label>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -762,12 +744,12 @@
                     <label class="flex items-center gap-3 cursor-pointer select-none">
                       <input 
                         type="radio" 
-                        name="q-${q.letter}-correct"
+                        name="q-${idx}-correct"
                         ${q.correctOptionIndex === oIdx ? "checked" : ""} 
                         onchange="updateCorrectOption(${idx}, ${oIdx})" 
                         class="w-5 h-5 accent-blue-500 cursor-pointer" 
                       />
-                      <span class="font-bold text-slate-400 w-4">${String.fromCharCode(65 + oIdx)}</span>
+                      <span class="font-bold text-slate-400 w-4">${String(oIdx + 1)}</span>
                     </label>
                     <div class="flex-1 flex gap-2 items-center relative">
                       <input 
@@ -775,7 +757,7 @@
                         value="${opt.replace(/"/g, "&quot;")}" 
                         oninput="customQuestions[${idx}].options[${oIdx}] = this.value" 
                         class="flex-1 bg-transparent outline-none font-medium text-slate-700" 
-                        placeholder="Option ${String.fromCharCode(65 + oIdx)}"
+                        placeholder="Option ${String(oIdx + 1)}"
                       />
                       ${q.optionImages && q.optionImages[oIdx] ? `
                         <div class="relative w-8 h-8 rounded shrink-0 overflow-hidden group">
@@ -795,23 +777,6 @@
                   .join("")}
               </div>
             </div>
-          `
-              : ""
-          }
-
-          ${
-            q.type === "fib"
-              ? `
-            <div>
-              <label class="block text-sm font-bold text-slate-500 mb-2">Answer</label>
-              <textarea 
-                oninput="customQuestions[${idx}].answer = this.value"
-                class="w-full bg-white border border-slate-300 rounded-xl p-3 resize-none h-20 focus:ring-2 focus:ring-blue-400 outline-none font-medium text-slate-700"
-              >${q.answer}</textarea>
-            </div>
-          `
-              : ""
-          }
         </div>
       `,
           )
@@ -868,19 +833,6 @@
                     </div>
                   </div>
                 </div>
-                <div>
-                  <label class="block text-sm font-bold text-slate-500 mb-2">Question Type</label>
-                  <div class="relative">
-                    <select onchange="genType = this.value" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 focus:ring-2 focus:ring-blue-400 outline-none font-medium text-slate-700 appearance-none cursor-pointer">
-                      <option value="mixed" ${genType === "mixed" ? "selected" : ""}>Mixed (MCQ & Fill in Blanks)</option>
-                      <option value="mcq" ${genType === "mcq" ? "selected" : ""}>Multiple Choice Only</option>
-                      <option value="fib" ${genType === "fib" ? "selected" : ""}>Fill in Blanks Only</option>
-                    </select>
-                    <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                      <i data-lucide="chevron-down" class="w-5 h-5"></i>
-                    </div>
-                  </div>
-                </div>
               </div>
               <button onclick="generateQuestions()" ${isGenerating ? "disabled" : ""} class="w-full py-4 bg-purple-600 text-white rounded-xl font-bold text-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 ${isGenerating ? '<div class="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin"></div> Generating...' : '<i data-lucide="sparkles" class="w-5 h-5"></i> Auto-Generate with AI'}
@@ -888,7 +840,7 @@
             </div>
 
             <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-8">
-              <h2 class="text-2xl font-bold mb-6 text-slate-700">3. Questions List (A-Z)</h2>
+              <h2 class="text-2xl font-bold mb-6 text-slate-700">3. Questions List</h2>
               <div class="space-y-6">${questionsHtml}</div>
             </div>
 
@@ -1052,7 +1004,7 @@
                       class="p-6 md:p-8 rounded-3xl text-3xl md:text-5xl lg:text-6xl font-bold border-[4px] transition-all flex flex-col sm:flex-row items-center sm:items-start text-left w-full gap-4 ${optionStyle}"
                     >
                       <div class="flex items-center flex-1 w-full">
-                        <span class="mr-4 md:mr-6 opacity-50 shrink-0">${String.fromCharCode(65 + i)}.</span> 
+                        <span class="mr-4 md:mr-6 opacity-50 shrink-0">${String(i + 1)}.</span> 
                         <span class="flex-1 break-words">${opt}</span>
                       </div>
                       ${imgHtml}

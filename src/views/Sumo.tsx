@@ -366,7 +366,7 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
             {leftTeam.q?.options.map((opt: string, idx: number) => (
               <button key={idx} onClick={() => handleAnswer('left', idx)}
                 className="bg-white hover:bg-blue-50 text-blue-900 rounded-xl md:rounded-3xl py-3 md:py-6 text-sm md:text-2xl font-black shadow-[0_4px_0_#1e3a8a] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center md:justify-between px-2 md:px-8">
-                <span className="hidden md:inline text-blue-400">{idx === 0 ? 'A:' : 'D:'}</span>
+                <span className="hidden md:inline text-blue-400">{idx + 1}:</span>
                 <span>{opt}</span>
               </button>
             ))}
@@ -429,7 +429,7 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
             {rightTeam.q?.options.map((opt: string, idx: number) => (
               <button key={idx} onClick={() => handleAnswer('right', idx)}
                 className="bg-white hover:bg-red-50 text-red-900 rounded-xl md:rounded-3xl py-3 md:py-6 text-sm md:text-2xl font-black shadow-[0_4px_0_#991b1b] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center md:justify-between px-2 md:px-8">
-                <span className="hidden md:inline text-red-400 uppercase">{idx === 0 ? '←:' : '→:'}</span>
+                <span className="hidden md:inline text-red-400 uppercase">{idx + 1}:</span>
                 <span>{opt}</span>
               </button>
             ))}

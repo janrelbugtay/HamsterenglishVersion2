@@ -44,8 +44,8 @@ const Card = ({ children, className = '', title, action }: any) => (
   </div>
 );
 
-const StatCard = ({ title, value, subtitle, trend, icon: Icon, colorClass, highlight, isLive }: any) => (
-  <Card className="hover:shadow-md transition-shadow relative overflow-hidden group">
+const StatCard = ({ title, value, subtitle, trend, icon: Icon, colorClass, highlight, isLive, children }: any) => (
+  <Card className="hover:shadow-md transition-shadow relative overflow-hidden group h-full flex flex-col">
     <div className={`absolute top-0 right-0 w-32 h-32 transform translate-x-12 -translate-y-12 rounded-full opacity-10 transition-transform group-hover:scale-110 ${colorClass}`}></div>
     <div className="flex justify-between items-start mb-4">
       <div>
@@ -65,16 +65,19 @@ const StatCard = ({ title, value, subtitle, trend, icon: Icon, colorClass, highl
         <Icon size={24} className={colorClass.replace('bg-', 'text-')} />
       </div>
     </div>
-    {subtitle && (
-      <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
-        {trend && (
-          <span className={`font-medium ${trend > 0 ? 'text-emerald-500' : 'text-red-500'} flex items-center`}>
-            {trend > 0 ? '+' : ''}{trend}%
-          </span>
-        )}
-        {subtitle}
-      </p>
-    )}
+    <div className="mt-auto">
+      {subtitle && (
+        <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+          {trend && (
+            <span className={`font-medium ${trend > 0 ? 'text-emerald-500' : 'text-red-500'} flex items-center`}>
+              {trend > 0 ? '+' : ''}{trend}%
+            </span>
+          )}
+          {subtitle}
+        </p>
+      )}
+      {children}
+    </div>
   </Card>
 );
 
@@ -109,8 +112,11 @@ const APP_GAMES = [
 ];
 
 const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {
-  const registeredUsers = users.filter((u: any) => !u.isAnonymous).length;
-  const guestUsers = users.filter((u: any) => u.isAnonymous).length;
+  const [showGuestModal, setShowGuestModal] = React.useState(false);
+  const registeredUsersList = users.filter((u: any) => !u.isAnonymous);
+  const registeredUsers = registeredUsersList.length;
+  const guestUsersList = users.filter((u: any) => u.isAnonymous);
+  const guestUsers = guestUsersList.length;
 
   return (
     <div className="space-y-6">
@@ -125,12 +131,35 @@ const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames
           title="Registered" value={registeredUsers.toLocaleString()} 
           subtitle="Non-guest accounts"
           icon={UserCheck} colorClass="bg-emerald-500" 
-        />
+        >
+          {registeredUsersList.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/50">
+              <div className="flex flex-wrap gap-2">
+                {registeredUsersList.map((u: any, i: number) => (
+                  <span key={i} className="px-2 py-1 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs rounded-md border border-emerald-100 dark:border-emerald-500/20 truncate max-w-full">
+                    {u.displayName || u.email || 'Unknown'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </StatCard>
         <StatCard 
           title="Guests" value={guestUsers.toLocaleString()} 
           subtitle="Anonymous accounts"
           icon={User} colorClass="bg-amber-500" 
-        />
+        >
+          {guestUsersList.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/50">
+              <button
+                onClick={() => setShowGuestModal(true)}
+                className="w-full px-3 py-2 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-sm font-semibold rounded-lg border border-amber-200 dark:border-amber-500/30 transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                View Guest Names
+              </button>
+            </div>
+          )}
+        </StatCard>
         <StatCard 
           title="Page Visits" value={pageVisits.toLocaleString()} 
           subtitle="Total platform visits"
@@ -227,6 +256,39 @@ const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames
           </table>
         </div>
       </Card>
+
+      {/* Guest Names Modal */}
+      {showGuestModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative border border-slate-200 dark:border-slate-700 animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowGuestModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-full transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-xl">
+                <User size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Guest Players</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{guestUsers} anonymous accounts</p>
+              </div>
+            </div>
+            
+            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+              <div className="flex flex-wrap gap-2">
+                {guestUsersList.map((u: any, i: number) => (
+                  <span key={i} className="px-3 py-1.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm font-medium rounded-lg border border-amber-100 dark:border-amber-500/20">
+                    {u.displayName || 'Guest Player'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
