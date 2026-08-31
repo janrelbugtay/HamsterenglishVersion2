@@ -2,7 +2,7 @@ const fs = require('fs');
 let code = fs.readFileSync('src/views/BubblePop.tsx', 'utf8');
 
 // 1. Fix gameState initial properties
-const gameStateResetOrig = `gameState.current = {
+const gameOrig = `gameState.current = {
         isActive: true,
         numPlayers: players,
         scores: [0, 0],
@@ -14,7 +14,7 @@ const gameStateResetOrig = `gameState.current = {
         questionStartTime: 0,
         questions: q,
     };`;
-const gameStateResetNew = `gameState.current = {
+const gameNew = `gameState.current = {
         isActive: true,
         numPlayers: players,
         scores: [0, 0],
@@ -29,16 +29,11 @@ const gameStateResetNew = `gameState.current = {
         size: bubbleSize,
         twist: twistEnabled
     };`;
-code = code.replace(gameStateResetOrig, gameStateResetNew);
+code = code.replace(gameOrig, gameNew);
 
-// 2. Fix the mouse event handlers missing 'detected' property instead of 'active'
-const handleMouseMoveOrig = `if (pointers.current[0].active) {`;
-const handleMouseMoveNew = `if (pointers.current[0].detected) {`;
-code = code.replace(handleMouseMoveOrig, handleMouseMoveNew);
-
-const handleMouseUpOrig = `pointers.current[0].active = false;`;
-const handleMouseUpNew = `pointers.current[0].detected = false;`;
-code = code.replace(handleMouseUpOrig, handleMouseUpNew);
+// 2. Fix the mouse event handlers
+code = code.replace(/pointers\.current\[0\]\.active = true;/g, 'pointers.current[0].detected = true; pointers.current[0].targetX = mx; pointers.current[0].targetY = my;');
+code = code.replace(/pointers\.current\[isLeft \? 0 : 1\]\.active = true;/g, 'pointers.current[isLeft ? 0 : 1].detected = true; pointers.current[isLeft ? 0 : 1].targetX = mx; pointers.current[isLeft ? 0 : 1].targetY = my;');
+code = code.replace(/pointers\.current\[isLeft \? 0 : 1\]\.active/g, 'pointers.current[isLeft ? 0 : 1].detected'); // just in case
 
 fs.writeFileSync('src/views/BubblePop.tsx', code);
-console.log('TypeScript errors patched.');

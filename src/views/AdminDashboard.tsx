@@ -113,9 +113,9 @@ const APP_GAMES = [
 
 const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {
   const [showGuestModal, setShowGuestModal] = React.useState(false);
-  const registeredUsersList = users.filter((u: any) => !u.isAnonymous);
+  const registeredUsersList = users.filter((u: any) => u.isAnonymous !== true && u.email !== "User");
   const registeredUsers = registeredUsersList.length;
-  const guestUsersList = users.filter((u: any) => u.isAnonymous);
+  const guestUsersList = users.filter((u: any) => u.isAnonymous === true || u.email === "User");
   const guestUsers = guestUsersList.length;
 
   return (
@@ -231,7 +231,7 @@ const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames
                       <Avatar src={user.photoURL} alt={user.displayName || user.email} size="sm" />
                       <div>
                         <p className="font-semibold text-slate-800 dark:text-slate-200">{user.displayName || 'User'}</p>
-                        {user.isAnonymous && (
+                        {(user.isAnonymous || user.email === "User") && (
                           <span className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded font-medium">Guest</span>
                         )}
                       </div>
@@ -628,10 +628,10 @@ export function AdminDashboard({ onViewChange }: { onViewChange: (view: any) => 
             {/* Admin Profile */}
             <div className="flex items-center gap-3 pl-3 border-l border-slate-200 dark:border-slate-700">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Teacher Jan</p>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{currentUser?.displayName || "Admin"}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Super Admin</p>
               </div>
-              <Avatar src={currentUser?.photoURL || "https://ui-avatars.com/api/?name=Admin"} alt="Admin" />
+              <Avatar src={currentUser?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.displayName || "Admin")}`} alt="Admin" />
             </div>
           </div>
         </header>

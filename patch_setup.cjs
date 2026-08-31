@@ -1,111 +1,89 @@
 const fs = require('fs');
-let code = fs.readFileSync('public/bubble-sentence.html', 'utf8');
+let code = fs.readFileSync('src/views/BubblePop.tsx', 'utf8');
 
-const oldSetup = `    <!-- Lobby / Setup Screen -->
-    <div id="screen-setup" class="screen bg-black/60 backdrop-blur-md justify-center items-center z-40 p-4">
-        <div class="glass bg-white p-8 rounded-[40px] shadow-2xl w-full max-w-2xl relative text-center border-4 border-gray-200">
-            <button onclick="Game.showScreen('screen-menu')" class="absolute top-6 right-6 text-3xl hover:scale-110 transition-transform">❌</button>
-            <h2 class="text-5xl font-black text-gray-800 mb-4 drop-shadow-sm">Game Setup Lobby</h2>
-<div class="mb-8 font-bold text-gray-500 text-lg flex justify-center gap-4">
-    <div class="bg-gray-100 rounded-full px-4 py-1">Best Score: <span id="lobby-best-score" class="text-blue-600">0</span></div>
-    <div class="bg-yellow-100 rounded-full px-4 py-1 text-yellow-700">Stars: <span id="lobby-stars">0</span></div>
-</div>
-            
-            <div class="flex flex-col md:flex-row gap-6 mb-8 justify-center">
-                <!-- 1 Player -->
-                <button onclick="Game.selectMode(false)" id="btn-mode-1" class="flex-1 p-8 rounded-3xl border-4 transition-all hover:scale-105 btn-premium">
-                    <div class="text-6xl mb-4">👤</div>
-                    <div class="text-2xl font-black text-gray-800">1 Player</div>
-                    <div class="text-sm font-bold text-gray-500 mt-2">Solo practice</div>
-                </button>
-                
-                <!-- Classroom -->
-                <button onclick="Game.selectMode(true)" id="btn-mode-2" class="flex-1 p-8 rounded-3xl border-4 transition-all hover:scale-105 btn-premium">
-                    <div class="text-6xl mb-4">👥</div>
-                    <div class="text-2xl font-black text-gray-800">Classroom</div>
-                    <div class="text-sm font-bold text-gray-500 mt-2">Team competition</div>
-                </button>
-            </div>
-            
-            <button onclick="Game.startGameFromLobby()" class="btn-premium green w-full py-4 text-2xl font-black shadow-lg">🚀 START GAME</button>
-        </div>
-    </div>`;
+const setupScreenStart = "{screen === 'setup' && (";
+const setupScreenEnd = "        </div>\n      )}";
+const startIndex = code.indexOf(setupScreenStart);
+// find the next closing </div>\n      )}
+const endIndex = code.indexOf(setupScreenEnd, startIndex) + setupScreenEnd.length;
 
-const newSetup = `    <!-- Lobby / Setup Screen -->
-    <div id="screen-setup" class="screen bg-black/60 backdrop-blur-md justify-center items-center z-40 p-4">
-        <div class="glass bg-white p-6 md:p-8 rounded-[40px] shadow-2xl w-full max-w-2xl relative text-center border-4 border-gray-200 flex flex-col max-h-[90vh]">
-            <button onclick="Game.showScreen('screen-menu')" class="absolute top-4 right-4 md:top-6 md:right-6 text-3xl hover:scale-110 transition-transform z-10">❌</button>
-            <h2 class="text-4xl md:text-5xl font-black text-gray-800 mb-2 md:mb-4 drop-shadow-sm shrink-0">Game Setup Lobby</h2>
-            
-            <div class="mb-4 md:mb-6 font-bold text-gray-500 text-sm md:text-lg flex justify-center gap-4 shrink-0">
-                <div class="bg-gray-100 rounded-full px-4 py-1">Best Score: <span id="lobby-best-score" class="text-blue-600">0</span></div>
-                <div class="bg-yellow-100 rounded-full px-4 py-1 text-yellow-700">Stars: <span id="lobby-stars">0</span></div>
-            </div>
-            
-            <div class="overflow-y-auto custom-scrollbar px-2 pb-4 flex-1">
-                <!-- Modes -->
-                <div class="flex flex-col md:flex-row gap-4 mb-6 justify-center p-1">
-                    <!-- 1 Player -->
-                    <button onclick="Game.selectMode(false)" id="btn-mode-1" class="flex-1 p-4 md:p-6 rounded-3xl border-4 transition-all hover:scale-105 btn-premium bg-white">
-                        <div class="text-4xl md:text-5xl mb-2">👤</div>
-                        <div class="text-lg md:text-xl font-black text-gray-800">1 PLAYER</div>
-                        <div class="text-xs md:text-sm font-bold text-gray-500 mt-1 uppercase">Solo practice</div>
-                    </button>
-                    
-                    <!-- Classroom -->
-                    <button onclick="Game.selectMode(true)" id="btn-mode-2" class="flex-1 p-4 md:p-6 rounded-3xl border-4 transition-all hover:scale-105 btn-premium bg-white">
-                        <div class="text-4xl md:text-5xl mb-2">👥</div>
-                        <div class="text-lg md:text-xl font-black text-gray-800">CLASSROOM</div>
-                        <div class="text-xs md:text-sm font-bold text-gray-500 mt-1 uppercase">Team competition</div>
-                    </button>
+const replacement = `{screen === 'setup' && (
+        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400 to-blue-200 dark:from-sky-900 dark:to-blue-950 flex flex-col items-center justify-center p-8 overflow-hidden">
+            {/* Immersive Background Elements */}
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-20 right-20 w-48 h-48 bg-blue-300/30 rounded-full blur-3xl"></div>
+                {/* Clouds */}
+                <div className="absolute top-20 left-[10%] opacity-80 animate-float" style={{ animationDelay: '0s' }}>
+                    <div className="w-24 h-8 bg-white rounded-full absolute top-4 left-4"></div>
+                    <div className="w-16 h-16 bg-white rounded-full absolute top-0 left-8"></div>
+                    <div className="w-12 h-12 bg-white rounded-full absolute top-2 left-2"></div>
                 </div>
-                
-                <!-- Settings Panel -->
-                <div class="bg-gray-50 rounded-3xl p-4 md:p-6 border-2 border-gray-200 mb-6 flex flex-col gap-4 text-left shadow-inner">
-                    <div class="flex justify-between items-center bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <span class="font-bold text-lg md:text-xl text-gray-700 flex items-center gap-2"><span>🎵</span> Sound Effects</span>
-                        <button id="sound-toggle-btn" onclick="window.toggleSound()" class="text-2xl md:text-3xl bg-gray-100 rounded-full shadow-inner border border-gray-200 hover:bg-gray-200 transition-colors w-14 h-14 flex items-center justify-center">🔊</button>
+                <div className="absolute top-40 right-[15%] opacity-60 animate-float" style={{ animationDelay: '2s' }}>
+                    <div className="w-32 h-10 bg-white rounded-full absolute top-6 left-6"></div>
+                    <div className="w-20 h-20 bg-white rounded-full absolute top-0 left-10"></div>
+                </div>
+                {/* Floating Bubbles */}
+                {Array.from({ length: 15 }).map((_, i) => (
+                    <div 
+                        key={i} 
+                        className="absolute rounded-full border border-white/40 bg-gradient-to-tr from-white/10 to-white/30 backdrop-blur-[2px] shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] animate-float-up"
+                        style={{
+                            width: \`\${Math.random() * 40 + 20}px\`,
+                            height: \`\${Math.random() * 40 + 20}px\`,
+                            left: \`\${Math.random() * 100}%\`,
+                            bottom: \`-\${Math.random() * 20 + 10}%\`,
+                            animationDuration: \`\${Math.random() * 10 + 10}s\`,
+                            animationDelay: \`\${Math.random() * 5}s\`
+                        }}
+                    >
+                        <div className="absolute top-[15%] left-[20%] w-1/4 h-1/4 bg-white/60 rounded-full blur-[1px]"></div>
                     </div>
-                    
-                    <div class="flex flex-col gap-2 bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-gray-100">
-                        <span class="font-bold text-lg md:text-xl text-gray-700 flex items-center gap-2"><span>⏱️</span> Response Time</span>
-                        <div class="relative">
-                            <select id="lobby-timer-select" class="p-3 rounded-xl border-2 border-gray-200 font-bold text-gray-700 text-lg focus:border-blue-500 outline-none w-full bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer appearance-none shadow-inner" style="text-align-last: center;">
-                                <option value="default">Category Default</option>
-                                <option value="30">30 Seconds</option>
-                                <option value="60">1 Minute</option>
-                                <option value="120">2 Minutes</option>
-                            </select>
-                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700">
-                                <svg class="fill-current h-6 w-6" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                            </div>
+                ))}
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center">
+                <h2 className="text-6xl sm:text-7xl font-black mb-12 text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-100 drop-shadow-[0_4px_4px_rgba(0,0,0,0.1)] text-center tracking-tight" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.5)' }}>
+                    Bubble Pop
+                </h2>
+                
+                <div className="flex gap-8 max-w-4xl w-full justify-center perspective-[1000px]">
+                    <button onClick={() => startGameMode(1)} className="group relative flex-1 max-w-[300px] h-80 rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-400/30 rounded-full blur-2xl group-hover:bg-blue-400/50 transition-colors"></div>
+                        
+                        <div className="relative z-10 text-7xl mb-6 transform group-hover:scale-110 transition-transform duration-500 drop-shadow-xl bg-blue-500 w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.6)]">
+                            👤
                         </div>
-                    </div>
+                        <h3 className="relative z-10 text-3xl font-black text-white mb-2 drop-shadow-md">1 Player</h3>
+                        <p className="relative z-10 text-blue-50 font-medium text-center">Practice and earn maximum XP.</p>
+                    </button>
+                    
+                    <button onClick={() => startGameMode(2)} className="group relative flex-1 max-w-[300px] h-80 rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-red-400/30 rounded-full blur-2xl group-hover:bg-red-400/50 transition-colors"></div>
+                        
+                        <div className="relative z-10 text-7xl mb-6 transform group-hover:scale-110 transition-transform duration-500 drop-shadow-xl bg-red-500 w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.6)]">
+                            👥
+                        </div>
+                        <h3 className="relative z-10 text-3xl font-black text-white mb-2 drop-shadow-md">2 Players</h3>
+                        <p className="relative z-10 text-blue-50 font-medium text-center">Compete side-by-side!</p>
+                    </button>
                 </div>
-
-                <!-- Teams Panel (Only show if Classroom is selected) -->
-                <div id="lobby-teams-panel" class="bg-blue-50 rounded-3xl p-4 md:p-6 border-2 border-blue-200 mb-2 text-left hidden shadow-inner">
-                    <div class="flex justify-between items-center mb-4">
-                        <span class="font-bold text-lg md:text-xl text-blue-800 flex items-center gap-2"><span>🏆</span> Teams (<span id="lobby-team-count">2</span>)</span>
-                        <button onclick="window.addTeam()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-xl font-bold shadow-md transition-transform hover:scale-105 active:scale-95 text-sm md:text-base border-b-4 border-blue-700 active:border-b-0 active:translate-y-1">➕ Add Team</button>
-                    </div>
-                    <div id="lobby-teams-list" class="flex flex-wrap gap-2 md:gap-3">
-                        <!-- teams rendered here -->
-                    </div>
-                    <div class="mt-4 text-sm font-bold text-blue-500/70 text-center italic">
-                        Tip: Click a team name to edit it!
-                    </div>
+                
+                <div className="flex flex-wrap justify-center gap-4 mt-12 relative z-10">
+                  <button onClick={() => onViewChange('games')} className="px-8 py-4 rounded-full bg-white/20 backdrop-blur-md shadow-lg hover:bg-white/30 text-xl font-bold text-white border border-white/40 cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
+                    <ArrowLeft size={24} /> Back to Games
+                  </button>
                 </div>
             </div>
-            
-            <button onclick="Game.startGameFromLobby()" class="btn-premium green w-full py-4 text-2xl font-black shadow-lg shrink-0 mt-4 z-10 relative">🚀 START GAME</button>
         </div>
-    </div>`;
+      )}`;
 
-if (code.includes('Game Setup Lobby')) {
-    code = code.replace(oldSetup, newSetup);
-    fs.writeFileSync('public/bubble-sentence.html', code);
-    console.log("Patched setup screen successfully");
+if (startIndex !== -1 && endIndex !== -1) {
+  code = code.substring(0, startIndex) + replacement + code.substring(endIndex);
+  fs.writeFileSync('src/views/BubblePop.tsx', code);
+  console.log('Successfully patched BubblePop.tsx');
 } else {
-    console.log("Could not find the setup screen");
+  console.error('Could not find boundaries');
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
 import { MediaPickerModal } from "../components/MediaPickerModal";
-import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings } from "lucide-react";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -137,6 +137,19 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
+  const cameraRef = useRef<any>(null);
+  const handsRef = useRef<any>(null);
+  const [cameraError, setCameraError] = useState("");
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [p1Name, setP1Name] = useState("P1");
+  const [p2Name, setP2Name] = useState("P2");
+  const [speed, setSpeed] = useState(1);
+  const [showInGameSettings, setShowInGameSettings] = useState(false);
+  const handleSetSpeed = (val: number) => { setSpeed(val); gameState.current.speed = val; };
+  const handleSetBubbleSize = (val: number) => { setBubbleSize(val); gameState.current.size = val; };
+  const handleSetTwistEnabled = (val: boolean) => { setTwistEnabled(val); gameState.current.twist = val; };
+  const [bubbleSize, setBubbleSize] = useState(1);
+  const [twistEnabled, setTwistEnabled] = useState(false);
   
   // Game engine state refs
   const gameState = useRef({
@@ -149,7 +162,10 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     correctPops: 0,
     wrongPops: 0,
     questionStartTime: 0,
-    questions: [] as Question[]
+    questions: [] as Question[],
+    speed: 1,
+    size: 1,
+    twist: false
   });
   
   const questionTimerRef = useRef<any>(null);
@@ -161,6 +177,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     particles: [] as any[],
     shockwaves: [] as any[],
     floatingTexts: [] as any[],
+    ambientParticles: [] as any[],
     isQuestionActive: false
   });
   
@@ -170,8 +187,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   ];
 
   const pointers = useRef([
-    { x: -100, y: -100, active: false, history: [] as any[], color: pointerColors[0] },
-    { x: -100, y: -100, active: false, history: [] as any[], color: pointerColors[1] }
+    { x: -100, y: -100, targetX: -100, targetY: -100, detected: false, history: [] as any[], color: pointerColors[0] },
+    { x: -100, y: -100, targetX: -100, targetY: -100, detected: false, history: [] as any[], color: pointerColors[1] }
   ]);
 
   useEffect(() => {
@@ -188,6 +205,12 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       gameState.current.isActive = false;
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+      if (cameraRef.current && cameraRef.current.stop) {
+          cameraRef.current.stop();
+      }
+      if (handsRef.current && handsRef.current.close) {
+          handsRef.current.close();
+      }
     };
   }, []);
 
@@ -259,9 +282,18 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     setScreen('loading');
     
     if (!videoRef.current?.srcObject) {
-       await setupCamera();
+       try {
+           await setupCamera();
+       } catch (err) {
+           // Error is already handled by setupCamera setting cameraError
+           return;
+       }
     }
     
+    continueStartGame(players);
+  };
+
+  const continueStartGame = (players: number = numPlayers) => {
     gameState.current = {
         isActive: true,
         numPlayers: players,
@@ -272,13 +304,15 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         correctPops: 0,
         wrongPops: 0,
         questionStartTime: 0,
-        questions: activeQuiz ? [...activeQuiz.questions].sort(() => 0.5 - Math.random()).slice(0, Math.min(5, activeQuiz.questions.length)) : []
+        questions: activeQuiz ? [...activeQuiz.questions].sort(() => 0.5 - Math.random()).slice(0, Math.min(5, activeQuiz.questions.length)) : [],
+        speed: speed,
+        size: bubbleSize,
+        twist: twistEnabled
     };
     
     setScores([0, 0]);
     setCombo(0);
     setShowCombo(false);
-
     setScreen('game');
     
     setTimeout(() => {
@@ -293,23 +327,30 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       x: number; y: number; baseVy: number; vy: number; vx: number;
       time: number; popped: boolean; state: string; width: number; height: number;
       imageElement?: HTMLImageElement;
+      playerId?: number;
 
-      constructor(index: number, text: string, isCorrect: boolean, totalOptions: number, w: number, h: number) {
+      constructor(index: number, text: string, isCorrect: boolean, totalOptions: number, w: number, h: number, playerId?: number) {
+          this.playerId = playerId;
           this.index = index; this.text = text; this.isCorrect = isCorrect;
           const bubbleColors = ['#ef4444', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#f97316'];
           this.color = bubbleColors[index % bubbleColors.length];
           this.width = w; this.height = h;
           
-          this.radius = Math.min(w, h) * 0.09; 
+          this.radius = Math.min(w, h) * 0.09 * (gameState.current.size || 1); 
           this.scale = 0; 
           this.targetScale = 1;
           
-          const sectionWidth = w / totalOptions;
-          this.x = (sectionWidth * index) + (sectionWidth / 2) + ((Math.random() - 0.5) * sectionWidth * 0.4); 
+          let usableW = w;
+          let xOffset = 0;
+          if (playerId === 0) { usableW = w / 2; xOffset = 0; }
+          else if (playerId === 1) { usableW = w / 2; xOffset = w / 2; }
+          
+          const sectionWidth = usableW / totalOptions;
+          this.x = xOffset + (sectionWidth * index) + (sectionWidth / 2) + ((Math.random() - 0.5) * sectionWidth * 0.4); 
           this.y = -this.radius - (Math.random() * 200); 
-          this.baseVy = 1.5 + Math.random();
+          this.baseVy = (1.5 + Math.random()) * (gameState.current.speed || 1);
           this.vy = this.baseVy;
-          this.vx = (Math.random() - 0.5) * 1.5; 
+          this.vx = (Math.random() - 0.5) * 1.5 * (gameState.current.speed || 1); 
           this.time = Math.random() * 100;
           this.popped = false;
           this.state = 'normal';
@@ -322,15 +363,36 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       }
       update() {
           if (this.popped) return;
-          this.time += 0.05;
+          this.time += 0.05 * (gameState.current.speed || 1);
           this.scale += (this.targetScale - this.scale) * 0.15;
-          this.x += this.vx + Math.sin(this.time) * 1.5;
-          this.y += this.vy + Math.cos(this.time * 0.5) * 0.5;
+          
+          if (gameState.current.twist) {
+              this.vx += Math.sin(this.time) * 0.2 * (gameState.current.speed || 1);
+              this.x += this.vx;
+          } else {
+              this.x += this.vx + Math.sin(this.time) * 1.5 * (gameState.current.speed || 1);
+          }
+          
+          this.y += this.vy + Math.cos(this.time * 0.5) * 0.5 * (gameState.current.speed || 1);
           if (this.y > this.height + this.radius) {
               this.y = -this.radius;
-              this.x = (this.width * 0.15) + (Math.random() * this.width * 0.7);
+              let usableW = this.width;
+              let xOffset = 0;
+              if (this.playerId === 0) { usableW = this.width / 2; xOffset = 0; }
+              else if (this.playerId === 1) { usableW = this.width / 2; xOffset = this.width / 2; }
+              this.x = xOffset + (usableW * 0.15) + (Math.random() * usableW * 0.7);
           }
-          if (this.x < this.radius || this.x > this.width - this.radius) this.vx *= -1;
+          
+          let minX = this.radius;
+          let maxX = this.width - this.radius;
+          if (this.playerId === 0) maxX = (this.width / 2) - this.radius;
+          if (this.playerId === 1) minX = (this.width / 2) + this.radius;
+          
+          if (this.x < minX || this.x > maxX) {
+              this.vx *= -1;
+              if (this.x < minX) this.x = minX;
+              if (this.x > maxX) this.x = maxX;
+          }
       }
       draw(ctx: CanvasRenderingContext2D) {
           if (this.popped) return;
@@ -386,8 +448,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
           }
           ctx.restore();
       }
-      checkCollision(px: number, py: number) {
+      checkCollision(px: number, py: number, pIndex?: number) {
           if (this.popped || this.scale < 0.8) return false;
+          if (this.playerId !== undefined && pIndex !== undefined && this.playerId !== pIndex) return false;
           const dx = this.x - px;
           const dy = this.y - py;
           return (dx*dx + dy*dy) < (this.radius * this.radius);
@@ -415,8 +478,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
           ctx.globalAlpha = this.life;
           if (this.isSparkle) {
               ctx.fillStyle = '#ffffff';
-              ctx.shadowColor = '#ffffff';
-              ctx.shadowBlur = 10;
+              // Removed shadowBlur to fix heavy lag during multi-explosions
               ctx.beginPath();
               ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
               ctx.fill();
@@ -471,10 +533,12 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       }
   }
 
-  const createExplosion = (x: number, y: number, color: string) => {
+  const createExplosion = (x: number, y: number, color: string, isPrimary = true) => {
       graphicsState.current.shockwaves.push(new Shockwave(x, y, color));
-      for (let i=0; i<20; i++) graphicsState.current.particles.push(new Particle(x, y, color, false)); 
-      for (let i=0; i<15; i++) graphicsState.current.particles.push(new Particle(x, y, color, true));  
+      const pCount = isPrimary ? 12 : 5;
+      const sCount = isPrimary ? 8 : 3;
+      for (let i=0; i<pCount; i++) graphicsState.current.particles.push(new Particle(x, y, color, false)); 
+      for (let i=0; i<sCount; i++) graphicsState.current.particles.push(new Particle(x, y, color, true));  
   };
 
   const startQuestion = () => {
@@ -512,7 +576,12 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             const h = containerRef.current?.clientHeight || 600;
 
             q.options.forEach((optText, i) => {
-                graphicsState.current.bubbles.push(new Bubble(i, optText, i === q.answerIndex, q.options.length, w, h));
+                if (gameState.current.numPlayers === 2) {
+                    graphicsState.current.bubbles.push(new Bubble(i, optText, i === q.answerIndex, q.options.length, w, h, 0));
+                    graphicsState.current.bubbles.push(new Bubble(i, optText, i === q.answerIndex, q.options.length, w, h, 1));
+                } else {
+                    graphicsState.current.bubbles.push(new Bubble(i, optText, i === q.answerIndex, q.options.length, w, h));
+                }
             });
             
             graphicsState.current.isQuestionActive = true;
@@ -566,7 +635,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                 if (!b.popped) {
                     setTimeout(() => {
                         b.popped = true;
-                        createExplosion(b.x, b.y, b.color);
+                        createExplosion(b.x, b.y, b.color, false);
                         playSound('pop');
                     }, Math.random() * 300);
                 }
@@ -668,26 +737,21 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
     ctx.clearRect(0, 0, width, height);
 
-    if (videoRef.current && videoRef.current.readyState >= 2) {
+    if (gameState.current.numPlayers === 2) {
         ctx.save();
-        ctx.translate(width, 0); ctx.scale(-1, 1);
-        
-        const vRatio = videoRef.current.videoWidth / videoRef.current.videoHeight;
-        const cRatio = width / height;
-        let dWidth, dHeight, dx, dy;
-
-        if (vRatio > cRatio) {
-            dHeight = height; dWidth = height * vRatio;
-            dx = (width - dWidth) / 2; dy = 0;
-        } else {
-            dWidth = width; dHeight = width / vRatio;
-            dx = 0; dy = (height - dHeight) / 2;
-        }
-        
-        ctx.globalAlpha = 0.3; 
-        ctx.drawImage(videoRef.current, dx, dy, dWidth, dHeight);
+        ctx.beginPath();
+        ctx.setLineDash([15, 15]);
+        ctx.moveTo(width / 2, 0);
+        ctx.lineTo(width / 2, height);
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.stroke();
         ctx.restore();
     }
+
+    // Video rendering handled by DOM element underneath the canvas now.
+    
+    
 
     graphicsState.current.bubbles.forEach(b => { b.update(); b.draw(ctx); });
     
@@ -702,19 +766,52 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     graphicsState.current.floatingTexts = graphicsState.current.floatingTexts.filter(ft => ft.life > 0);
     graphicsState.current.floatingTexts.forEach(ft => { ft.update(); ft.draw(ctx); });
 
+    // Ambient background particles
+    if (Math.random() < 0.2) {
+        graphicsState.current.ambientParticles.push({
+            x: Math.random() * width,
+            y: height + 20,
+            vy: -1 - Math.random() * 2,
+            size: Math.random() * 4 + 1,
+            alpha: Math.random() * 0.5 + 0.1
+        });
+    }
+    
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    graphicsState.current.ambientParticles = graphicsState.current.ambientParticles.filter(p => p.y > -20);
+    graphicsState.current.ambientParticles.forEach(p => {
+        p.y += p.vy;
+        p.x += Math.sin(p.y * 0.01) * 0.5;
+        ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
+
     pointers.current.forEach((pointer, pIndex) => {
-        if (pointer.active) {
+        if (pointer.detected) {
+            if (pointer.x === -100) { pointer.x = pointer.targetX; pointer.y = pointer.targetY; }
+            pointer.x += (pointer.targetX - pointer.x) * 0.5;
+            pointer.y += (pointer.targetY - pointer.y) * 0.5;
+            
             pointer.history.push({x: pointer.x, y: pointer.y});
-            if (pointer.history.length > 15) pointer.history.shift();
+            if (pointer.history.length > 20) pointer.history.shift();
 
             if (graphicsState.current.isQuestionActive) {
                 graphicsState.current.bubbles.forEach(b => {
-                    if (b.checkCollision(pointer.x, pointer.y)) handlePop(b, pIndex);
+                    // Make it slightly easier to pop by allowing collision across history points
+                    const isHitting = b.checkCollision(pointer.x, pointer.y, pIndex) ||
+                                      (pointer.history.length > 5 && b.checkCollision(pointer.history[pointer.history.length - 5].x, pointer.history[pointer.history.length - 5].y, pIndex));
+                    if (isHitting) handlePop(b, pIndex);
                 });
             }
-            pointer.active = false; 
         } else if (pointer.history.length > 0) {
             pointer.history.shift(); 
+            if (pointer.history.length === 0) {
+                pointer.x = -100; pointer.y = -100;
+            }
         }
 
         if (pointer.history.length > 1) {
@@ -739,15 +836,28 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             const tip = pointer.history[pointer.history.length - 1];
             ctx.save();
             ctx.translate(tip.x, tip.y);
-            ctx.rotate(Date.now() * 0.005);
+            
+            const pulse = 1 + Math.sin(Date.now() * 0.01) * 0.2;
+            
+            ctx.rotate(Date.now() * 0.003);
+            ctx.scale(pulse, pulse);
             ctx.fillStyle = '#ffffff';
             ctx.shadowColor = pointer.color.main;
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 25;
+            
+            // Draw a more intricate magic star cursor
             ctx.beginPath();
-            ctx.moveTo(0, -20); ctx.quadraticCurveTo(5, -5, 20, 0);
-            ctx.quadraticCurveTo(5, 5, 0, 20); ctx.quadraticCurveTo(-5, 5, -20, 0);
-            ctx.quadraticCurveTo(-5, -5, 0, -20);
+            ctx.moveTo(0, -25); ctx.quadraticCurveTo(6, -6, 25, 0);
+            ctx.quadraticCurveTo(6, 6, 0, 25); ctx.quadraticCurveTo(-6, 6, -25, 0);
+            ctx.quadraticCurveTo(-6, -6, 0, -25);
             ctx.fill();
+            
+            // Inner core
+            ctx.fillStyle = pointer.color.main;
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
             ctx.restore();
         }
     });
@@ -758,6 +868,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     const width = containerRef.current?.clientWidth || 800;
     const height = containerRef.current?.clientHeight || 600;
 
+    pointers.current.forEach(p => p.detected = false);
+
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         let detected = [];
         for (let i = 0; i < results.multiHandLandmarks.length; i++) {
@@ -767,17 +879,24 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         detected.sort((a, b) => a.x - b.x);
 
         if (gameState.current.numPlayers === 1 && detected.length > 0) {
-            pointers.current[0].x = detected[0].x; pointers.current[0].y = detected[0].y;
-            pointers.current[0].active = true;
+            pointers.current[0].targetX = detected[0].x; 
+            pointers.current[0].targetY = detected[0].y;
+            pointers.current[0].detected = true;
         } else if (gameState.current.numPlayers === 2) {
             if (detected.length === 1) {
                 const isLeft = detected[0].x < width / 2;
-                pointers.current[isLeft ? 0 : 1].x = detected[0].x;
-                pointers.current[isLeft ? 0 : 1].y = detected[0].y;
-                pointers.current[isLeft ? 0 : 1].active = true;
+                const idx = isLeft ? 0 : 1;
+                pointers.current[idx].targetX = detected[0].x;
+                pointers.current[idx].targetY = detected[0].y;
+                pointers.current[idx].detected = true;
             } else if (detected.length >= 2) {
-                pointers.current[0].x = detected[0].x; pointers.current[0].y = detected[0].y; pointers.current[0].active = true;
-                pointers.current[1].x = detected[1].x; pointers.current[1].y = detected[1].y; pointers.current[1].active = true;
+                pointers.current[0].targetX = detected[0].x; 
+                pointers.current[0].targetY = detected[0].y; 
+                pointers.current[0].detected = true;
+                
+                pointers.current[1].targetX = detected[1].x; 
+                pointers.current[1].targetY = detected[1].y; 
+                pointers.current[1].detected = true;
             }
         }
     }
@@ -785,22 +904,28 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
   const setupCamera = async () => {
     try {
+        setCameraError("");
         const win = window as any;
         if (win.Hands && win.Camera) {
             const hands = new win.Hands({locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+            hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.75, minTrackingConfidence: 0.75 });
             hands.onResults(onResults);
+            handsRef.current = hands;
             
             if (videoRef.current) {
                 const camera = new win.Camera(videoRef.current, {
                     onFrame: async () => { if (videoRef.current) await hands.send({image: videoRef.current}); },
                     width: 1280, height: 720
                 });
+                cameraRef.current = camera;
                 await camera.start();
+                setIsCameraActive(true);
             }
         }
-    } catch (e) {
-        console.error(e);
+    } catch (e: any) {
+        console.error("Camera setup failed:", e);
+        setCameraError(e.message || "Could not start video source. Please check permissions or if another app is using the camera.");
+        throw e;
     }
   };
 
@@ -814,11 +939,11 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             const my = e.clientY - rect.top;
             
             if (gameState.current.numPlayers === 1) {
-                pointers.current[0].x = mx; pointers.current[0].y = my; pointers.current[0].active = true;
+                pointers.current[0].x = mx; pointers.current[0].y = my; pointers.current[0].detected = true; pointers.current[0].targetX = mx; pointers.current[0].targetY = my;
             } else {
                 const isLeft = mx < width / 2;
                 pointers.current[isLeft ? 0 : 1].x = mx; pointers.current[isLeft ? 0 : 1].y = my;
-                pointers.current[isLeft ? 0 : 1].active = true;
+                pointers.current[isLeft ? 0 : 1].detected = true; pointers.current[isLeft ? 0 : 1].targetX = mx; pointers.current[isLeft ? 0 : 1].targetY = my;
             }
         };
         canvasRef.current.addEventListener('mousemove', handleMouseMove);
@@ -833,13 +958,16 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       <button 
         onClick={() => {
             gameState.current.isActive = false;
+            if (cameraRef.current && cameraRef.current.stop) { cameraRef.current.stop(); setIsCameraActive(false); }
+            setIsCameraActive(false);
+            if (handsRef.current && handsRef.current.close) handsRef.current.close();
             onViewChange("home");
         }}
         className="absolute top-4 left-4 z-[60] flex items-center gap-2 p-2 rounded-full transition-colors backdrop-blur-md border text-slate-600 dark:text-white/80 hover:text-slate-900 dark:hover:text-white bg-slate-200/50 dark:bg-black/20 hover:bg-slate-300/50 dark:hover:bg-black/50 border-slate-300/50 dark:border-white/20"
       >
         <ArrowLeft size={24} />
       </button>
-        <FullscreenButton targetId="game-container" className="ml-2" />
+        <FullscreenButton targetId="game-container" className="absolute top-4 right-4 z-[60]" />
 
       <style>{`
         .glass-panel {
@@ -890,7 +1018,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         }
       `}</style>
       
-      <video ref={videoRef} className="hidden" autoPlay playsInline></video>
+      <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover z-0 scale-x-[-1]" autoPlay playsInline muted></video>
 
       {/* Screen: Intro */}
       {screen === 'intro' && (
@@ -914,23 +1042,89 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
       {/* Screen: Setup */}
       {screen === 'setup' && (
-        <div className="absolute inset-0 z-40 bg-slate-900 flex flex-col items-center justify-center p-8">
-            <h2 className="text-5xl font-black mb-12 drop-shadow-lg text-slate-800 dark:text-white">Select Game Mode</h2>
-            <div className="flex gap-8 max-w-4xl w-full">
-                <button onClick={() => startGameMode(1)} className="flex-1 glass-panel hover:bg-black/5 dark:hover:bg-white/10 rounded-3xl p-10 flex flex-col items-center border-t-4 border-blue-400 transition-transform hover:scale-105 cursor-pointer text-slate-800 dark:text-white">
-                    <div className="text-6xl mb-6 bg-blue-500 w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.6)]">👤</div>
-                    <h3 className="text-3xl font-bold mb-2">1 Player</h3>
-                    <p className="text-slate-400 text-center">Practice and earn maximum XP.</p>
-                </button>
-                <button onClick={() => startGameMode(2)} className="flex-1 glass-panel hover:bg-black/5 dark:hover:bg-white/10 rounded-3xl p-10 flex flex-col items-center border-t-4 border-red-400 transition-transform hover:scale-105 cursor-pointer text-slate-800 dark:text-white">
-                    <div className="text-6xl mb-6 bg-red-500 w-24 h-24 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.6)]">👥</div>
-                    <h3 className="text-3xl font-bold mb-2">2 Players</h3>
-                    <p className="text-slate-400 text-center">Compete side-by-side!</p>
-                </button>
+        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400 to-blue-200 dark:from-sky-900 dark:to-blue-950 flex flex-col items-center justify-center p-8 overflow-hidden">
+            {/* Immersive Background Elements */}
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-20 right-20 w-48 h-48 bg-blue-300/30 rounded-full blur-3xl"></div>
+                {/* Clouds */}
+                <div className="absolute top-20 left-[10%] opacity-80 animate-float" style={{ animationDelay: '0s' }}>
+                    <div className="w-24 h-8 bg-white rounded-full absolute top-4 left-4"></div>
+                    <div className="w-16 h-16 bg-white rounded-full absolute top-0 left-8"></div>
+                    <div className="w-12 h-12 bg-white rounded-full absolute top-2 left-2"></div>
+                </div>
+                <div className="absolute top-40 right-[15%] opacity-60 animate-float" style={{ animationDelay: '2s' }}>
+                    <div className="w-32 h-10 bg-white rounded-full absolute top-6 left-6"></div>
+                    <div className="w-20 h-20 bg-white rounded-full absolute top-0 left-10"></div>
+                </div>
+                {/* Floating Bubbles */}
+                {Array.from({ length: 15 }).map((_, i) => (
+                    <div 
+                        key={i} 
+                        className="absolute rounded-full border border-white/40 bg-gradient-to-tr from-white/10 to-white/30 backdrop-blur-[2px] shadow-[inset_0_0_10px_rgba(255,255,255,0.5)] animate-float-up"
+                        style={{
+                            width: `${Math.random() * 40 + 20}px`,
+                            height: `${Math.random() * 40 + 20}px`,
+                            left: `${Math.random() * 100}%`,
+                            bottom: `-${Math.random() * 20 + 10}%`,
+                            animationDuration: `${Math.random() * 10 + 10}s`,
+                            animationDelay: `${Math.random() * 5}s`
+                        }}
+                    >
+                        <div className="absolute top-[15%] left-[20%] w-1/4 h-1/4 bg-white/60 rounded-full blur-[1px]"></div>
+                    </div>
+                ))}
             </div>
-            <div className="flex gap-4 mt-12">
-              <button onClick={() => onViewChange('games')} className="px-8 py-3 rounded-full glass-panel hover:bg-white/20 text-xl font-bold text-slate-800 dark:text-white cursor-pointer">Back to Games</button>
 
+            <div className="relative z-10 flex flex-col items-center">
+                <h2 className="text-6xl sm:text-7xl font-black mb-12 text-transparent bg-clip-text bg-gradient-to-b from-white to-blue-100 drop-shadow-[0_4px_4px_rgba(0,0,0,0.1)] text-center tracking-tight" style={{ WebkitTextStroke: '1px rgba(255,255,255,0.5)' }}>
+                    Bubble Pop
+                </h2>
+                
+                <div className="w-full max-w-2xl bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-[2rem] border border-white/20 p-8 shadow-2xl mb-8 flex flex-col items-center relative z-10">
+                    <div className="flex gap-6 mb-8 w-full justify-center">
+                        <button
+                            onClick={() => setNumPlayers(1)}
+                            className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border border-white/20 transition-all duration-300 ${numPlayers === 1 ? 'bg-blue-500/30 scale-105 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'bg-black/20 hover:bg-white/10'}`}
+                        >
+                            <div className="text-5xl bg-blue-500 w-20 h-20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.6)]">👤</div>
+                            <span className="text-white font-bold text-2xl">1 Player</span>
+                        </button>
+                        <button
+                            onClick={() => setNumPlayers(2)}
+                            className={`flex-1 flex flex-col items-center gap-3 p-6 rounded-3xl border border-white/20 transition-all duration-300 ${numPlayers === 2 ? 'bg-red-500/30 scale-105 shadow-[0_0_30px_rgba(239,68,68,0.3)]' : 'bg-black/20 hover:bg-white/10'}`}
+                        >
+                            <div className="text-5xl bg-red-500 w-20 h-20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.6)]">👥</div>
+                            <span className="text-white font-bold text-2xl">2 Players</span>
+                        </button>
+                    </div>
+
+                    <div className="w-full max-w-md flex flex-col gap-4 mb-10">
+                        <div className="flex gap-3 items-center">
+                            <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(59,130,246,0.6)]">1</div>
+                            <input type="text" value={p1Name} onChange={e => setP1Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Player 1 Name" />
+                        </div>
+                        {numPlayers === 2 && (
+                            <div className="flex gap-3 items-center">
+                                <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(239,68,68,0.6)]">2</div>
+                                <input type="text" value={p2Name} onChange={e => setP2Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Player 2 Name" />
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => startGameMode(numPlayers)}
+                        className="px-12 py-5 bg-gradient-to-r from-blue-500 to-sky-400 text-white font-black text-2xl rounded-full shadow-[0_0_30px_rgba(59,130,246,0.5)] hover:scale-105 active:scale-95 transition-all w-full max-w-md"
+                    >
+                        START GAME
+                    </button>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-4 relative z-10">
+                  <button onClick={() => onViewChange('games')} className="px-8 py-4 rounded-full bg-white/20 backdrop-blur-md shadow-lg hover:bg-white/30 text-xl font-bold text-white border border-white/40 cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
+                    <ArrowLeft size={24} /> Back to Games
+                  </button>
+                </div>
             </div>
         </div>
       )}
@@ -941,24 +1135,44 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 animate-[spin_120s_linear_infinite]"></div>
             <div className="text-6xl mb-8 animate-bounce z-10">🫧</div>
             <h2 className="text-3xl font-bold mb-2 z-10 text-slate-800 dark:text-white">Loading Camera & AI...</h2>
-            <p className="text-slate-400 mb-8 z-10">Please grant camera permissions.</p>
-            <div className="loading-bar-container z-10">
-                <div className="loading-bar-fill animate-[pulse_2s_infinite]" style={{ width: '100%' }}></div>
-            </div>
+            {cameraError ? (
+                <div className="flex flex-col items-center z-10 p-6 bg-red-500/10 border border-red-500/30 rounded-2xl max-w-lg text-center">
+                    <p className="text-red-500 font-bold mb-2 text-xl">Camera Error</p>
+                    <p className="text-red-400 mb-6">{cameraError}</p>
+                    <div className="flex gap-4">
+                        <button onClick={() => {
+                            if (cameraRef.current && cameraRef.current.stop) { cameraRef.current.stop(); setIsCameraActive(false); }
+                            setScreen('setup');
+                        }} className="px-6 py-3 bg-slate-800 text-white rounded-full font-bold hover:bg-slate-700 transition-colors">
+                            Back to Setup
+                        </button>
+                        <button onClick={() => continueStartGame(numPlayers)} className="px-6 py-3 bg-blue-500 text-white rounded-full font-bold hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30">
+                            Play with Mouse Instead
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <p className="text-slate-400 mb-8 z-10">Please grant camera permissions.</p>
+                    <div className="loading-bar-container z-10">
+                        <div className="loading-bar-fill animate-[pulse_2s_infinite]" style={{ width: '100%' }}></div>
+                    </div>
+                </>
+            )}
         </div>
       )}
 
       {/* Screen: Game */}
       {screen === 'game' && (
         <div className="absolute inset-0 z-30 flex flex-col">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,#dbeafe,#f8fafc)] dark:bg-[radial-gradient(circle_at_50%_100%,#1e3a8a,#0f172a)] z-0 pointer-events-none"></div>
+            {!isCameraActive && <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,#dbeafe,#f8fafc)] dark:bg-[radial-gradient(circle_at_50%_100%,#1e3a8a,#0f172a)] -z-10 pointer-events-none"></div>}
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10"></canvas>
 
             <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none z-20 pt-20">
                 <div className="flex justify-between items-start w-full gap-4">
                     
                     <div className="glass-panel bg-white/90 dark:bg-slate-900/80 rounded-2xl p-4 min-w-[200px] border-l-4 border-blue-500 flex items-center gap-4 backdrop-blur-md">
-                        <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.6)]">P1</div>
+                        <div className="min-w-[3rem] px-3 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.6)]">{numPlayers === 2 ? p1Name : "P1"}</div>
                         <div>
                             <div className="text-sm font-bold text-blue-400 uppercase tracking-wider">Score</div>
                             <div className="text-3xl font-black">{scores[0]}</div>
@@ -982,7 +1196,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                                 <div className="text-sm font-bold text-red-400 uppercase tracking-wider">Score</div>
                                 <div className="text-3xl font-black">{scores[1]}</div>
                             </div>
-                            <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)]">P2</div>
+                            <div className="min-w-[3rem] px-3 h-12 rounded-full bg-red-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)]">{p2Name}</div>
                         </div>
                     ) : (
                         <div className="min-w-[200px]"></div>
@@ -995,6 +1209,74 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                         if (questionTimerRef.current) clearInterval(questionTimerRef.current);
                         setScreen('setup');
                     }} className="glass-panel px-6 py-2 rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer">Exit</button>
+                    <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="glass-panel w-12 h-12 flex justify-center items-center rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer ml-4">
+                        <Settings size={20} className="text-slate-800 dark:text-white" />
+                    </button>
+                    
+                    {showInGameSettings && (
+                        <div className="absolute left-6 bottom-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-[60]">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Game Settings</h3>
+                                <button onClick={() => setShowInGameSettings(false)} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-colors cursor-pointer">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <div className="flex flex-col gap-6">
+                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                                    <div className="flex justify-between">
+                                        <span>Bubble Speed</span>
+                                        <span className="text-blue-500">{speed}x</span>
+                                    </div>
+                                    <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                                </label>
+                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                                    <div className="flex justify-between">
+                                        <span>Bubble Size</span>
+                                        <span className="text-blue-500">{bubbleSize}x</span>
+                                    </div>
+                                    <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                                </label>
+                                <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
+                                    <span>Twist Effect</span>
+                                    <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
+                                </label>
+                            </div>
+                        </div>
+                    )}
+                    <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="glass-panel w-12 h-12 flex justify-center items-center rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer ml-4">
+                        <Settings size={20} className="text-slate-800 dark:text-white" />
+                    </button>
+                    
+                    {showInGameSettings && (
+                        <div className="absolute left-6 bottom-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-50">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Game Settings</h3>
+                                <button onClick={() => setShowInGameSettings(false)} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-colors cursor-pointer">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                            <div className="flex flex-col gap-6">
+                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                                    <div className="flex justify-between">
+                                        <span>Bubble Speed</span>
+                                        <span className="text-blue-500">{speed}x</span>
+                                    </div>
+                                    <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                                </label>
+                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                                    <div className="flex justify-between">
+                                        <span>Bubble Size</span>
+                                        <span className="text-blue-500">{bubbleSize}x</span>
+                                    </div>
+                                    <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                                </label>
+                                <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
+                                    <span>Twist Effect</span>
+                                    <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
+                                </label>
+                            </div>
+                        </div>
+                    )}
                     
                     {countdown !== null ? (
                         <div className="glass-panel bg-blue-100/90 dark:bg-blue-900/80 rounded-full px-8 py-3 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
@@ -1042,7 +1324,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     </div>
                     <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
                         <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Score</div>
-                        <div className="text-3xl md:text-5xl font-black text-sky-400 drop-shadow-sm">{numPlayers === 1 ? scores[0] : `P1:${scores[0]} P2:${scores[1]}`}</div>
+                        <div className="text-3xl md:text-5xl font-black text-sky-400 drop-shadow-sm">{numPlayers === 1 ? scores[0] : `${p1Name}:${scores[0]} ${p2Name}:${scores[1]}`}</div>
                     </div>
                     <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
                         <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">XP Earned</div>
@@ -1074,6 +1356,87 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
   const [questions, setQuestions] = useState<Question[]>(quiz.questions);
   const [errorMsg, setErrorMsg] = useState("");
   const [activeGiphyInput, setActiveGiphyInput] = useState<{ qId: number | string, optIndex: number } | null>(null);
+
+  const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [toastMsg, setToastMsg] = useState("");
+
+  const handleApplyBulkPaste = (action: 'replace' | 'append') => {
+    const parsed = parsePastedQuiz(bulkText);
+    if (parsed.length === 0) {
+      setErrorMsg("Please enter or paste at least one item.");
+      setTimeout(() => setErrorMsg(""), 3000);
+      return;
+    }
+
+    const newItems: Question[] = parsed.map((item, i) => ({
+      id: Date.now() + i + Math.random(),
+      text: item.text || "",
+      options: item.options || ["", "", "", ""],
+      answerIndex: item.answerIndex || 0,
+    }));
+
+    if (action === 'replace') {
+      setQuestions(newItems);
+    } else {
+      setQuestions(prev => {
+        if (prev.length === 1 && !prev[0].text.trim()) {
+          return newItems;
+        }
+        return [...prev, ...newItems];
+      });
+    }
+
+    setToastMsg(`✨ Added ${parsed.length} questions!`);
+    setTimeout(() => setToastMsg(""), 3500);
+    setShowBulkPasteModal(false);
+    setBulkText("");
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    const pastedText = e.clipboardData.getData('text');
+    if (!pastedText) return;
+
+    const parsedItems = parsePastedQuiz(pastedText);
+    
+    // If it's just a single question with no options and it matches exactly, let normal paste handle it
+    if (parsedItems.length === 1 && parsedItems[0].text === pastedText && parsedItems[0].options?.every(o => !o)) {
+       return;
+    }
+
+    if (parsedItems.length > 0) {
+      e.preventDefault();
+      
+      const newItems: Question[] = parsedItems.map((item, i) => ({
+        id: Date.now() + i + Math.random(),
+        text: item.text || "",
+        options: item.options || ["", "", "", ""],
+        answerIndex: item.answerIndex || 0,
+      }));
+
+      setQuestions(prev => {
+        const updated = [...prev];
+        const current = updated[index];
+
+        if (current && !current.text.trim()) {
+          updated.splice(index, 1, ...newItems);
+        } else {
+          updated.splice(index + 1, 0, ...newItems);
+        }
+        return updated;
+      });
+
+      setToastMsg(`✨ Automatically divided into ${parsedItems.length} questions!`);
+      setTimeout(() => setToastMsg(""), 3500);
+
+      setTimeout(() => {
+        const targetIdx = index + parsedItems.length - (questions[index]?.text.trim() ? 0 : 1);
+        const targetInput = document.getElementById(`question-input-${targetIdx}`);
+        targetInput?.focus();
+      }, 80);
+    }
+  };
+
 
   const addQuestion = () => {
     setQuestions([...questions, { id: Date.now(), text: '', options: ['', '', '', ''], answerIndex: 0 }]);
@@ -1220,7 +1583,96 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
           </div>
         )}
 
+        {toastMsg && (
+          <div className="bg-cyan-500/20 text-cyan-500 dark:text-cyan-300 p-3 mx-6 mt-6 rounded-xl font-bold text-center border border-cyan-500/30 animate-in fade-in slide-in-from-top-2 duration-300 flex items-center justify-center gap-2 shadow-sm">
+            <Sparkles size={18} /> {toastMsg}
+          </div>
+        )}
+
+        {/* Bulk Paste Modal */}
+        {showBulkPasteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl flex flex-col gap-5 transform scale-100 animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center font-bold">
+                    <ClipboardList size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">
+                      Bulk Paste & Auto-Divide
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Paste multiple questions, numbered lists, or tabular TSV data.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => { setShowBulkPasteModal(false); setBulkText(""); }}
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Paste Text Below (Supports multi-line Q&A format or Excel copy)
+                </label>
+                <textarea 
+                  rows={6}
+                  value={bulkText}
+                  onChange={(e) => setBulkText(e.target.value)}
+                  placeholder={"Example:\n1. What is the capital of France?\na) London\nb) Paris\nc) Berlin\nd) Madrid\n\nOr paste tabular data directly from Excel!"}
+                  className="w-full text-sm font-medium bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-white p-4 rounded-2xl focus:border-cyan-500 transition-colors custom-scrollbar"
+                />
+              </div>
+
+              {bulkText.trim() && (
+                <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="text-cyan-500 mt-0.5"><Info size={16} /></div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">
+                    Found <span className="font-bold text-slate-800 dark:text-white">{parsePastedQuiz(bulkText).length}</span> items. 
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button 
+                  onClick={() => handleApplyBulkPaste('replace')}
+                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                >
+                  Replace All
+                </button>
+                <button 
+                  onClick={() => handleApplyBulkPaste('append')}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30"
+                >
+                  Append to End
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="p-6 flex flex-col gap-6 bg-slate-100 dark:bg-slate-900/50">
+          {/* Smart Tip Bar */}
+          <div className="bg-blue-500/10 dark:bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-blue-900 dark:text-blue-200">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold">
+                <Info size={18} />
+              </div>
+              <p className="text-xs sm:text-sm font-medium">
+                <span className="font-bold">Smart Paste:</span> Paste multiple lines, numbered Q&As, or Excel rows directly into any box below — they will automatically populate!
+              </p>
+            </div>
+            <button
+              onClick={() => setShowBulkPasteModal(true)}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer self-end sm:self-auto"
+            >
+              <ClipboardList size={14} /> Bulk Paste Modal
+            </button>
+          </div>
           {questions.map((q, index) => (
             <div key={q.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-300 dark:border-slate-700 shadow-sm relative group">
               <button 
@@ -1240,6 +1692,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
                   value={q.text}
                   onChange={(e) => updateQuestion(q.id, 'text', e.target.value)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
+                  onPaste={(e) => handlePaste(e, index)}
                   placeholder="Type your question here..."
                   className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500 text-slate-800 dark:text-white font-medium"
                 />
@@ -1313,4 +1766,104 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
       />
     </div>
   );
+}
+
+function parsePastedQuiz(rawText: string): Partial<Question>[] {
+  if (!rawText || !rawText.trim()) return [];
+  const items: Partial<Question>[] = [];
+  
+  if (rawText.includes('\t')) {
+    const lines = rawText.split(/\r?\n/).filter(line => line.trim());
+    lines.forEach(line => {
+      const parts = line.split('\t').map(p => p.trim());
+      if (parts.length > 0) {
+        items.push({
+          text: parts[0],
+          options: [
+            parts[1] || "",
+            parts[2] || "",
+            parts[3] || "",
+            parts[4] || ""
+          ],
+          answerIndex: 0
+        });
+      }
+    });
+    if (items.length > 0) return items;
+  }
+  
+  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let currentQ: Partial<Question> | null = null;
+  const optionRegex = /^([a-eA-E1-4])[\.\)\:\-]\s+(.*)/;
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    
+    let inlineAnswerMatch = line.match(/\banswer\s*[:=]?\s*([a-eA-E1-4])\b/i);
+    let inlineAnswerIndex = -1;
+    if (inlineAnswerMatch) {
+       const val = inlineAnswerMatch[1].toUpperCase();
+       if (/[A-E]/.test(val)) inlineAnswerIndex = val.charCodeAt(0) - 65;
+       else if (/[1-4]/.test(val)) inlineAnswerIndex = parseInt(val) - 1;
+       line = line.replace(inlineAnswerMatch[0], '').trim();
+    }
+    
+    const ansMatch = line.match(/^answer\s*[:=]?\s*([a-eA-E1-4])/i);
+    if (ansMatch || line === '') {
+       if (currentQ && (ansMatch || inlineAnswerIndex !== -1)) {
+          const val = ansMatch ? ansMatch[1].toUpperCase() : inlineAnswerMatch![1].toUpperCase();
+          if (/[A-E]/.test(val)) currentQ.answerIndex = val.charCodeAt(0) - 65;
+          else if (/[1-4]/.test(val)) currentQ.answerIndex = parseInt(val) - 1;
+       }
+       continue;
+    }
+    
+    const optMatch = line.match(optionRegex);
+    if (optMatch) {
+       if (!currentQ) {
+          currentQ = { text: "Question", options: ["", "", "", ""], answerIndex: 0 };
+          items.push(currentQ);
+       }
+       
+       const optText = optMatch[2].trim();
+       const prefix = optMatch[1].toUpperCase();
+       let expectedIndex = -1;
+       if (/[A-E]/.test(prefix)) expectedIndex = prefix.charCodeAt(0) - 65;
+       else if (/[1-4]/.test(prefix)) expectedIndex = parseInt(prefix) - 1;
+       
+       if (expectedIndex >= 0 && expectedIndex < 4) {
+           currentQ.options![expectedIndex] = optText;
+       } else {
+           const emptyIdx = currentQ.options!.findIndex(o => o === "");
+           if (emptyIdx !== -1) currentQ.options![emptyIdx] = optText;
+       }
+       
+       if (inlineAnswerIndex !== -1) {
+           currentQ.answerIndex = inlineAnswerIndex;
+       }
+    } else {
+       const hasOptions = currentQ && currentQ.options!.some(o => o !== "");
+       const qText = line.replace(/^(?:\d+[\.\)\:\-]|\[\d+\])\s+/, "");
+       
+       if (!currentQ || hasOptions) {
+           currentQ = { text: qText, options: ["", "", "", ""], answerIndex: 0 };
+           items.push(currentQ);
+           if (inlineAnswerIndex !== -1) {
+               currentQ.answerIndex = inlineAnswerIndex;
+           }
+       } else {
+           currentQ.text += " " + qText;
+           if (inlineAnswerIndex !== -1) {
+               currentQ.answerIndex = inlineAnswerIndex;
+           }
+       }
+    }
+  }
+
+  const allEmptyOptions = items.every(q => q.options!.every(o => o === ""));
+  if (allEmptyOptions && items.length > 0) {
+     return items; 
+  }
+
+  return items;
 }
