@@ -89,11 +89,6 @@ export const GamesLibrary = ({
     }
   };
 
-  useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
 
   const confirmDelete = async (gameId: string) => {
     try {
@@ -308,9 +303,9 @@ export const GamesLibrary = ({
           {filteredGames.map((game) => (
             <div
               key={game.id}
-              className="group bg-white dark:bg-slate-800 rounded-[24px] overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border-2 border-slate-100 dark:border-slate-700 flex flex-col"
+              className={`group bg-white dark:bg-slate-800 rounded-[24px] shadow-sm hover:shadow-xl transition-all duration-300 border-2 border-slate-100 dark:border-slate-700 flex flex-col relative ${openMenuId === game.id ? 'z-50' : 'z-10'}`}
             >
-              <div className="p-5 flex flex-col h-full relative z-10 bg-white dark:bg-slate-800">
+              <div className="p-5 flex flex-col h-full relative z-10 bg-white dark:bg-slate-800 rounded-[24px]">
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="font-black text-lg text-slate-800 dark:text-slate-200 line-clamp-2 pr-2">
                     {game.topic || "No Topic"}
@@ -341,7 +336,7 @@ export const GamesLibrary = ({
 
                 <div className="flex gap-2 mt-auto pt-2 relative z-20">
                   <button
-                    onClick={() => onViewChange((game.gameType as any) || "mystery-box", game)}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewChange((game.gameType as any) || "mystery-box", game); }}
                     className="flex-1 bg-green-500 text-white hover:bg-green-600 font-black py-2.5 px-4 rounded-xl shadow-[0_3px_0_#166534] active:translate-y-[3px] active:shadow-none transition-all flex items-center justify-center gap-2"
                   >
                     <Play className="w-5 h-5 fill-current" /> Play
@@ -349,8 +344,7 @@ export const GamesLibrary = ({
 
                   <div className="relative">
                     <button
-                      onClick={() => {
-                        if (openMenuId === game.id) {
+                      onClick={(e) => { e.stopPropagation(); if (openMenuId === game.id) {
                           setOpenMenuId(null);
                           setGameToMove(null);
                         } else {
@@ -375,7 +369,7 @@ export const GamesLibrary = ({
                               </div>
                               <div className="max-h-48 overflow-y-auto custom-scrollbar">
                                  <button 
-                                    onClick={() => { handleMoveGame(null); setOpenMenuId(null); }}
+                                    onClick={(e) => { e.stopPropagation(); handleMoveGame(null); setOpenMenuId(null); }}
                                     className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900/50 text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2"
                                  >
                                     <Gamepad2 className="w-4 h-4 text-slate-400" />
@@ -384,7 +378,7 @@ export const GamesLibrary = ({
                                  {folders.map(f => (
                                     <button
                                        key={f.id}
-                                       onClick={() => { handleMoveGame(f.id); setOpenMenuId(null); }}
+                                       onClick={(e) => { e.stopPropagation(); handleMoveGame(f.id); setOpenMenuId(null); }}
                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900/50 text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2 border-t border-slate-100 dark:border-slate-700"
                                     >
                                        <Folder className="w-4 h-4 text-slate-400" />
@@ -396,7 +390,7 @@ export const GamesLibrary = ({
                           ) : (
                             <div className="py-2">
                               <button
-                                onClick={() => { onViewChange((game.gameType as any) || "mystery-box", { ...game, editMode: true }); setOpenMenuId(null); }}
+                                onClick={(e) => { e.stopPropagation(); onViewChange((game.gameType as any) || "mystery-box", { ...game, editMode: true }); setOpenMenuId(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-3 transition-colors"
                               >
                                 <Edit2 className="w-4 h-4 text-blue-500" />
@@ -410,7 +404,7 @@ export const GamesLibrary = ({
                                 Move to Folder...
                               </button>
                               <button
-                                onClick={() => { handleTogglePublic(game); setOpenMenuId(null); }}
+                                onClick={(e) => { e.stopPropagation(); handleTogglePublic(game); setOpenMenuId(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-3 transition-colors"
                               >
                                 {game.isPublic ? (
@@ -420,7 +414,7 @@ export const GamesLibrary = ({
                                 )}
                               </button>
                               <button
-                                onClick={() => { handleDuplicateGame(game); setOpenMenuId(null); }}
+                                onClick={(e) => { e.stopPropagation(); handleDuplicateGame(game); setOpenMenuId(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-3 transition-colors"
                               >
                                 <Copy className="w-4 h-4 text-indigo-500" />
@@ -428,7 +422,7 @@ export const GamesLibrary = ({
                               </button>
                               <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
                               <button
-                                onClick={() => { handleDelete(game.id); setOpenMenuId(null); }}
+                                onClick={(e) => { e.stopPropagation(); handleDelete(game.id); setOpenMenuId(null); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-3 transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />

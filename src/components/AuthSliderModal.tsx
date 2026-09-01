@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, User, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, auth } from '../lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 
 export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }: { isOpen: boolean; onClose: () => void; onJoinRoom?: (code: string, nickname: string, gameType: string) => void; initialRoomCode?: string }) {
@@ -67,6 +67,14 @@ export function AuthSliderModal({ isOpen, onClose, onJoinRoom, initialRoomCode }
       setIsGuestLoading(true);
       try {
         await updateProfile(auth.currentUser, { displayName: guestName.trim() });
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          uid: auth.currentUser.uid,
+          displayName: guestName.trim(),
+          isAnonymous: true,
+          email: 'User',
+          photoURL: null,
+          lastLoginAt: new Date()
+        }, { merge: true });
         onClose();
       } catch (err) {
         setError('Error setting guest name');

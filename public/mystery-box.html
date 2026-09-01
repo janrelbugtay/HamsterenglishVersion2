@@ -1466,6 +1466,7 @@
         }
         if (event.data?.type === "LOAD_MYSTERY_BOX") {
           const gameData = event.data.data;
+          console.log("LOAD_MYSTERY_BOX", gameData);
           
           gameTopic = gameData.topic || "";
           gameClass = gameData.className || "";

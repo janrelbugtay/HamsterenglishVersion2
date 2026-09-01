@@ -89,7 +89,7 @@ const SumoCharacter = ({ team, isPushing, isStunned, positionStyle, flip }: any)
 
 export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
   const { user } = useAuth();
-  const [screen, setScreen] = useState<'menu' | 'playing' | 'end' | 'setup'>(initialGame ? 'setup' : 'menu'); 
+  const [screen, setScreen] = useState<'menu' | 'playing' | 'end' | 'setup'>(initialGame && !initialGame.editMode ? 'menu' : 'setup'); 
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {

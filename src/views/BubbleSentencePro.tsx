@@ -28,7 +28,7 @@ interface GameData {
 
 export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
   const { user } = useAuth();
-  const [screen, setScreen] = useState<GameScreen>(initialGame ? 'setup' : 'editor');
+  const [screen, setScreen] = useState<GameScreen>(initialGame && !initialGame.editMode ? 'setup' : 'editor');
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
   const [activeGame, setActiveGame] = useState<GameData>(() => {
     if (initialGame) {

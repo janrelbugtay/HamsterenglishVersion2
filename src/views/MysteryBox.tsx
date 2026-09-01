@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { ArrowLeft, Save, X } from "lucide-react";
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
@@ -127,28 +127,27 @@ export function MysteryBox({
     return () => window.removeEventListener("message", handleMessage);
   }, [user, initialGame, onViewChange]);
 
-  useEffect(() => {
-    // If we have an initial game, send it to the iframe once it's loaded
-    const handleIframeLoad = () => {
-      setIframeLoaded(true);
-      if (initialGame && iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          { type: "LOAD_MYSTERY_BOX", data: initialGame },
-          "*",
-        );
-      }
-    };
-
-    const iframe = iframeRef.current;
-    if (iframe) {
-      iframe.addEventListener("load", handleIframeLoad);
+  const handleIframeLoad = useCallback(() => {
+    setIframeLoaded(true);
+    if (initialGame && iframeRef.current?.contentWindow) {
+      console.log("Posting LOAD_MYSTERY_BOX on load", initialGame);
+      iframeRef.current.contentWindow.postMessage(
+        { type: "LOAD_MYSTERY_BOX", data: initialGame },
+        "*"
+      );
     }
-    return () => {
-      if (iframe) {
-        iframe.removeEventListener("load", handleIframeLoad);
-      }
-    };
   }, [initialGame]);
+
+  useEffect(() => {
+    // We already have onLoad on the iframe, but if it somehow changes after mount:
+    if (iframeLoaded && initialGame && iframeRef.current?.contentWindow) {
+      console.log("Posting LOAD_MYSTERY_BOX on initialGame change", initialGame);
+      iframeRef.current.contentWindow.postMessage(
+        { type: "LOAD_MYSTERY_BOX", data: initialGame },
+        "*"
+      );
+    }
+  }, [initialGame, iframeLoaded]);
 
   return (
     <div id="game-container" className="w-full h-full flex flex-col -mx-4 md:-mx-8 -my-4 md:-my-8 relative">
@@ -169,6 +168,7 @@ export function MysteryBox({
       <iframe
         ref={iframeRef}
         src="/mystery-box.html"
+        onLoad={handleIframeLoad}
         className="w-full flex-1 border-none bg-slate-50"
         title="Mystery Box Game"
       />

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
 import { MediaPickerModal } from "../components/MediaPickerModal";
-import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings, Copy } from "lucide-react";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -38,11 +38,12 @@ interface Quiz {
   questions: Question[];
   thumbnail?: string;
   isFavorite?: boolean;
+  isPublic?: boolean;
 }
 
 export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
   const { user } = useAuth();
-  const [screen, setScreen] = useState<GameScreen>(initialGame ? 'setup' : 'editor');
+  const [screen, setScreen] = useState<GameScreen>(initialGame && !initialGame.editMode ? 'setup' : 'editor');
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         customQuestions: quiz.questions,
         userId: user.uid,
         updatedAt: new Date().toISOString(),
+        isPublic: quiz.isPublic ?? false,
       }));
 
       if (initialGame?.id) {
@@ -656,11 +658,11 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             gameState.current.combo = 0; 
             setShowCombo(false);
 
-            const penalty = 5;
-            gameState.current.scores[playerIndex] = Math.max(0, gameState.current.scores[playerIndex] - penalty);
+            const penalty = 0;
+            // No penalty, just pop it and lose combo.
             setScores([...gameState.current.scores]);
             
-            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `-${penalty}`, '#ef4444'));
+            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `X`, '#ef4444'));
             
             if (canvasRef.current) {
                 canvasRef.current.classList.add('shake');
@@ -713,8 +715,18 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     setCoinsEarned(coins);
     
     let title = "Good Try!";
-    if (acc > 90) title = "Perfect Round!";
-    else if (acc > 70) title = "Excellent!";
+    if (gameState.current.numPlayers === 1) {
+        if (acc > 90) title = "Perfect Round!";
+        else if (acc > 70) title = "Excellent!";
+    } else {
+        if (gameState.current.scores[0] > gameState.current.scores[1]) {
+            title = `${p1Name} Wins!`;
+        } else if (gameState.current.scores[1] > gameState.current.scores[0]) {
+            title = `${p2Name} Wins!`;
+        } else {
+            title = "It's a Tie!";
+        }
+    }
     setResultsTitle(title);
     
     playSound('win');
@@ -967,7 +979,45 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       >
         <ArrowLeft size={24} />
       </button>
-        <FullscreenButton targetId="game-container" className="absolute top-4 right-4 z-[60]" />
+        <div className="absolute top-4 right-4 z-[70] flex gap-3 pointer-events-auto">
+        {screen === 'game' && (
+          <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="w-12 h-12 flex justify-center items-center rounded-full bg-white/20 dark:bg-black/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-slate-800 dark:text-white transition-all shadow-lg cursor-pointer">
+              <Settings size={20} />
+          </button>
+        )}
+        <FullscreenButton targetId="game-container" className="" />
+      </div>
+      
+      {screen === 'game' && showInGameSettings && (
+          <div className="absolute right-4 top-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-[80]">
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white">Game Settings</h3>
+                  <button onClick={() => setShowInGameSettings(false)} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-colors cursor-pointer">
+                      <X size={16} />
+                  </button>
+              </div>
+              <div className="flex flex-col gap-6">
+                  <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                      <div className="flex justify-between">
+                          <span>Bubble Speed</span>
+                          <span className="text-blue-500">{speed}x</span>
+                      </div>
+                      <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                  </label>
+                  <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                      <div className="flex justify-between">
+                          <span>Bubble Size</span>
+                          <span className="text-blue-500">{bubbleSize}x</span>
+                      </div>
+                      <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
+                  </label>
+                  <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
+                      <span>Twist Effect</span>
+                      <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
+                  </label>
+              </div>
+          </div>
+      )}
 
       <style>{`
         .glass-panel {
@@ -1191,92 +1241,24 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     </div>
 
                     {numPlayers === 2 ? (
-                        <div className="glass-panel bg-white/90 dark:bg-slate-900/80 rounded-2xl p-4 min-w-[200px] border-r-4 border-red-500 flex items-center justify-end gap-4 backdrop-blur-md">
-                            <div className="text-right">
-                                <div className="text-sm font-bold text-red-400 uppercase tracking-wider">Score</div>
-                                <div className="text-3xl font-black">{scores[1]}</div>
+                        <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-4 min-w-[180px] md:min-w-[220px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+                            <div className="flex flex-col items-center gap-1 mb-2">
+                                <div className="min-w-[4rem] px-4 h-10 rounded-full bg-red-500 flex items-center justify-center text-lg font-black text-white shadow-inner uppercase tracking-wider">{p2Name}</div>
+                                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>
                             </div>
-                            <div className="min-w-[3rem] px-3 h-12 rounded-full bg-red-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)]">{p2Name}</div>
+                            <div className="text-5xl md:text-7xl font-black text-red-500 dark:text-red-400 drop-shadow-sm tabular-nums tracking-tighter">{scores[1]}</div>
                         </div>
                     ) : (
-                        <div className="min-w-[200px]"></div>
+                        <div className="min-w-[180px] md:min-w-[220px]"></div>
                     )}
                 </div>
 
-                <div className="flex justify-between items-end w-full">
+                <div className="flex justify-between items-end w-full pointer-events-auto">
                     <button onClick={() => {
                         gameState.current.isActive = false;
                         if (questionTimerRef.current) clearInterval(questionTimerRef.current);
                         setScreen('setup');
-                    }} className="glass-panel px-6 py-2 rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer">Exit</button>
-                    <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="glass-panel w-12 h-12 flex justify-center items-center rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer ml-4">
-                        <Settings size={20} className="text-slate-800 dark:text-white" />
-                    </button>
-                    
-                    {showInGameSettings && (
-                        <div className="absolute left-6 bottom-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-[60]">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Game Settings</h3>
-                                <button onClick={() => setShowInGameSettings(false)} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-colors cursor-pointer">
-                                    <X size={16} />
-                                </button>
-                            </div>
-                            <div className="flex flex-col gap-6">
-                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                                    <div className="flex justify-between">
-                                        <span>Bubble Speed</span>
-                                        <span className="text-blue-500">{speed}x</span>
-                                    </div>
-                                    <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                                </label>
-                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                                    <div className="flex justify-between">
-                                        <span>Bubble Size</span>
-                                        <span className="text-blue-500">{bubbleSize}x</span>
-                                    </div>
-                                    <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                                </label>
-                                <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
-                                    <span>Twist Effect</span>
-                                    <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
-                                </label>
-                            </div>
-                        </div>
-                    )}
-                    <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="glass-panel w-12 h-12 flex justify-center items-center rounded-full hover:bg-white/20 font-bold pointer-events-auto border border-white/20 cursor-pointer ml-4">
-                        <Settings size={20} className="text-slate-800 dark:text-white" />
-                    </button>
-                    
-                    {showInGameSettings && (
-                        <div className="absolute left-6 bottom-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-50">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-xl font-bold text-slate-800 dark:text-white">Game Settings</h3>
-                                <button onClick={() => setShowInGameSettings(false)} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-colors cursor-pointer">
-                                    <X size={16} />
-                                </button>
-                            </div>
-                            <div className="flex flex-col gap-6">
-                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                                    <div className="flex justify-between">
-                                        <span>Bubble Speed</span>
-                                        <span className="text-blue-500">{speed}x</span>
-                                    </div>
-                                    <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                                </label>
-                                <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                                    <div className="flex justify-between">
-                                        <span>Bubble Size</span>
-                                        <span className="text-blue-500">{bubbleSize}x</span>
-                                    </div>
-                                    <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                                </label>
-                                <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
-                                    <span>Twist Effect</span>
-                                    <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
-                                </label>
-                            </div>
-                        </div>
-                    )}
+                    }} className="glass-panel px-6 py-2 rounded-full hover:bg-white/20 font-bold border border-white/20 cursor-pointer">Exit</button>
                     
                     {countdown !== null ? (
                         <div className="glass-panel bg-blue-100/90 dark:bg-blue-900/80 rounded-full px-8 py-3 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
@@ -1293,48 +1275,80 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       {screen === 'results' && (
         <div className="absolute inset-0 z-50 bg-slate-100 dark:bg-[#0f121b] flex flex-col items-center justify-center overflow-hidden font-sans">
             <div className="rounded-3xl p-8 max-w-2xl w-full text-center relative z-10 bg-white dark:bg-[#252836] shadow-2xl border border-slate-200 dark:border-slate-700/50">
-                <h2 className="text-3xl md:text-4xl font-black text-yellow-400 uppercase tracking-widest mb-6 drop-shadow-sm">{resultsTitle}</h2>
-                <div className="flex justify-center gap-3 mb-10">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                        <div key={star} className="relative">
-                            <svg 
-                                viewBox="0 0 24 24" 
-                                className={`w-12 h-12 md:w-16 md:h-16 transition-all duration-500 transform ${accuracy >= (star * 20 - 10) ? 'scale-100 opacity-100' : 'scale-75 opacity-30 grayscale'}`}
-                                style={{
-                                    filter: accuracy >= (star * 20 - 10) ? 'drop-shadow(0 8px 6px rgba(0,0,0,0.4))' : 'none',
-                                    animation: accuracy >= (star * 20 - 10) ? `popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${star * 0.1}s both` : 'none'
-                                }}
-                            >
-                                <path 
-                                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" 
-                                    fill={accuracy >= (star * 20 - 10) ? "#facc15" : "#475569"} 
-                                    stroke={accuracy >= (star * 20 - 10) ? "#ca8a04" : "#334155"} 
-                                    strokeWidth="1.5"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
-                        </div>
-                    ))}
-                </div>
+                <h2 className={`text-4xl md:text-5xl font-black uppercase tracking-widest mb-6 drop-shadow-sm ${numPlayers === 2 && scores[0] !== scores[1] ? (scores[0] > scores[1] ? 'text-blue-500' : 'text-red-500') : 'text-yellow-400'}`}>{resultsTitle}</h2>
                 
-                <div className="grid grid-cols-2 gap-4 md:gap-6 mb-10">
-                    <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                        <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Accuracy</div>
-                        <div className="text-3xl md:text-5xl font-black text-emerald-400 drop-shadow-sm">{accuracy}%</div>
+                {numPlayers === 1 ? (
+                    <>
+                        <div className="flex justify-center gap-3 mb-10">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <div key={star} className="relative">
+                                    <svg 
+                                        viewBox="0 0 24 24" 
+                                        className={`w-12 h-12 md:w-16 md:h-16 transition-all duration-500 transform ${accuracy >= (star * 20 - 10) ? 'scale-100 opacity-100' : 'scale-75 opacity-30 grayscale'}`}
+                                        style={{
+                                            filter: accuracy >= (star * 20 - 10) ? 'drop-shadow(0 8px 6px rgba(0,0,0,0.4))' : 'none',
+                                            animation: accuracy >= (star * 20 - 10) ? `popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) ${star * 0.1}s both` : 'none'
+                                        }}
+                                    >
+                                        <path 
+                                            d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" 
+                                            fill={accuracy >= (star * 20 - 10) ? "#facc15" : "#475569"} 
+                                            stroke={accuracy >= (star * 20 - 10) ? "#ca8a04" : "#334155"} 
+                                            strokeWidth="1.5"
+                                            strokeLinejoin="round"
+                                        />
+                                    </svg>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4 md:gap-6 mb-10">
+                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Accuracy</div>
+                                <div className="text-3xl md:text-5xl font-black text-emerald-400 drop-shadow-sm">{accuracy}%</div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Score</div>
+                                <div className="text-3xl md:text-5xl font-black text-sky-400 drop-shadow-sm">{scores[0]}</div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">XP Earned</div>
+                                <div className="text-2xl md:text-4xl font-black text-fuchsia-400 drop-shadow-sm">+{xpEarned}</div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Coins Earned</div>
+                                <div className="text-2xl md:text-4xl font-black text-yellow-400 drop-shadow-sm">+{coinsEarned}</div>
+                            </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="flex flex-col gap-8 mb-10 w-full">
+                        <div className="flex items-center justify-center gap-4 w-full">
+                            <div className={`flex flex-col items-center flex-1 p-6 rounded-2xl border-4 transition-all ${scores[0] > scores[1] ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 scale-105 shadow-xl' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 grayscale-[20%]'}`}>
+                                <div className="min-w-[4rem] px-4 py-1 rounded-full bg-blue-500 text-white font-bold uppercase tracking-wider mb-4 shadow-md">{p1Name}</div>
+                                <div className={`text-5xl md:text-7xl font-black tabular-nums tracking-tighter ${scores[0] > scores[1] ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>{scores[0]}</div>
+                            </div>
+                            
+                            <div className="text-3xl font-black text-slate-300 dark:text-slate-600 px-2 italic">VS</div>
+                            
+                            <div className={`flex flex-col items-center flex-1 p-6 rounded-2xl border-4 transition-all ${scores[1] > scores[0] ? 'border-red-500 bg-red-50 dark:bg-red-900/20 scale-105 shadow-xl' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 grayscale-[20%]'}`}>
+                                <div className="min-w-[4rem] px-4 py-1 rounded-full bg-red-500 text-white font-bold uppercase tracking-wider mb-4 shadow-md">{p2Name}</div>
+                                <div className={`text-5xl md:text-7xl font-black tabular-nums tracking-tighter ${scores[1] > scores[0] ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>{scores[1]}</div>
+                            </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 dark:bg-[#303343] p-4 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs font-black uppercase tracking-wider mb-1">XP Earned</div>
+                                <div className="text-2xl font-black text-fuchsia-400 drop-shadow-sm">+{xpEarned}</div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-[#303343] p-4 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
+                                <div className="text-slate-400 text-xs font-black uppercase tracking-wider mb-1">Coins Earned</div>
+                                <div className="text-2xl font-black text-yellow-400 drop-shadow-sm">+{coinsEarned}</div>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                        <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Score</div>
-                        <div className="text-3xl md:text-5xl font-black text-sky-400 drop-shadow-sm">{numPlayers === 1 ? scores[0] : `${p1Name}:${scores[0]} ${p2Name}:${scores[1]}`}</div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                        <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">XP Earned</div>
-                        <div className="text-2xl md:text-4xl font-black text-fuchsia-400 drop-shadow-sm">+{xpEarned}</div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                        <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Coins Earned</div>
-                        <div className="text-2xl md:text-4xl font-black text-yellow-400 drop-shadow-sm">+{coinsEarned}</div>
-                    </div>
-                </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row justify-center gap-4">
                     <button onClick={() => setScreen('setup')} className="px-8 py-4 bg-slate-200 hover:bg-slate-300 dark:bg-[#393c4b] dark:hover:bg-[#444857] rounded-xl font-black text-lg transition-colors cursor-pointer text-slate-700 dark:text-white shadow-lg">Back to Setup</button>
@@ -1357,6 +1371,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
   const [errorMsg, setErrorMsg] = useState("");
   const [activeGiphyInput, setActiveGiphyInput] = useState<{ qId: number | string, optIndex: number } | null>(null);
 
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [toastMsg, setToastMsg] = useState("");
@@ -1487,6 +1502,20 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
     });
   };
 
+  const duplicateQuestion = (index: number) => {
+    setQuestions(prev => {
+      const newQuestions = [...prev];
+      const qToCopy = prev[index];
+      const duplicatedQ = {
+        ...qToCopy,
+        id: Date.now() + Math.random(),
+        options: [...qToCopy.options]
+      };
+      newQuestions.splice(index + 1, 0, duplicatedQ);
+      return newQuestions;
+    });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -1504,23 +1533,28 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
   };
 
   const handleSave = () => {
-    const generatedTitle = "Bubble Pop Game";
-
     const validQuestions = questions.filter(q => q.text.trim());
     if(validQuestions.length === 0) {
       setErrorMsg("Please add at least one complete question.");
       setTimeout(() => setErrorMsg(""), 3000);
       return;
     }
-    
+    setShowPublishModal(true);
+  };
+
+  const confirmSave = (isPublic: boolean) => {
+    const generatedTitle = "Bubble Pop Game";
+    const validQuestions = questions.filter(q => q.text.trim());
     onSave({
       ...quiz,
       title: generatedTitle,
       folderId,
       topic,
       classLevel,
-      questions: validQuestions
+      questions: validQuestions,
+      isPublic
     });
+    setShowPublishModal(false);
   };
 
   return (
@@ -1676,8 +1710,16 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
           {questions.map((q, index) => (
             <div key={q.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-300 dark:border-slate-700 shadow-sm relative group">
               <button 
+                onClick={() => duplicateQuestion(index)}
+                title="Duplicate Question"
+                className="absolute right-6 -top-3 w-8 h-8 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-500 hover:text-white border-2 border-white dark:border-slate-800 cursor-pointer z-10"
+              >
+                <Copy size={14} />
+              </button>
+              <button 
                 onClick={() => removeQuestion(q.id)}
-                className="absolute -right-3 -top-3 w-8 h-8 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white border-2 border-white dark:border-slate-800 cursor-pointer"
+                title="Delete Question"
+                className="absolute -right-3 -top-3 w-8 h-8 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white border-2 border-white dark:border-slate-800 cursor-pointer z-10"
               >
                 <Trash2 size={14} />
               </button>
@@ -1764,6 +1806,34 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
           }
         }}
       />
+      {showPublishModal && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md p-8 shadow-2xl border-2 border-blue-500/30 flex flex-col items-center text-center">
+            <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2">Save Game</h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-8 font-medium">Would you like to publish this game to the public gallery so others can play it, or keep it private?</p>
+            <div className="flex flex-col gap-3 w-full">
+              <button 
+                onClick={() => confirmSave(true)}
+                className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-sky-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+              >
+                🌍 Publish to Public
+              </button>
+              <button 
+                onClick={() => confirmSave(false)}
+                className="w-full py-3.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                🔒 Keep Private
+              </button>
+              <button 
+                onClick={() => setShowPublishModal(false)}
+                className="w-full py-2 mt-2 text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

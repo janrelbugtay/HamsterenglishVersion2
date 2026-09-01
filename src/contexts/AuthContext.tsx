@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, linkWithPopup, GoogleAuthProvider, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, linkWithPopup, GoogleAuthProvider, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signInWithCredential } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, googleProvider, facebookProvider } from '../lib/firebase';
 
@@ -88,11 +88,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const credential = GoogleAuthProvider.credentialFromError(error);
         if (credential) {
           try {
-            await signInWithPopup(auth, googleProvider);
+            await signInWithCredential(auth, credential);
             return;
           } catch(e: any) {
              if (e?.code !== 'auth/popup-closed-by-user' && e?.code !== 'auth/cancelled-popup-request') {
-               console.error("sign in with popup after link error", e);
+               console.error("sign in with credential after link error", e);
              }
              return;
           }
