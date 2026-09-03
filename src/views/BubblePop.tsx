@@ -946,7 +946,6 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     } catch (e: any) {
         console.error("Camera setup failed:", e);
         setCameraError(e.message || "Could not start video source. Please check permissions or if another app is using the camera.");
-        throw e;
     }
   };
 
