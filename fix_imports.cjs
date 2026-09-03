@@ -1,8 +1,16 @@
 const fs = require('fs');
-let code = fs.readFileSync('src/views/GamesLibrary.tsx', 'utf8');
 
-code = code.replace("from '../firebase'", "from '../lib/firebase'");
-code = code.replace("from '../context/AuthContext'", "from '../contexts/AuthContext'");
+let yoga = fs.readFileSync('src/views/YogaQuiz.tsx', 'utf8');
 
-fs.writeFileSync('src/views/GamesLibrary.tsx', code);
-console.log("Fixed imports in GamesLibrary.tsx");
+yoga = yoga.replace(
+    "import { ChevronLeft, Plus, Edit3, Trash2, Play, Search, Sparkles, Save, X, BookOpen, Clock, Heart, ArrowLeft, Download, Maximize, Minimize } from 'lucide-react';",
+    "import { ChevronLeft, Plus, Edit3, Trash2, Play, Search, Sparkles, Save, X, BookOpen, Clock, Heart, ArrowLeft, Download, Maximize, Minimize, ClipboardList, Info, Copy, Image as ImageIcon } from 'lucide-react';"
+);
+
+yoga = yoga.replace(
+    'import { FullscreenButton } from "../components/FullscreenButton";',
+    'import { FullscreenButton } from "../components/FullscreenButton";\nimport { MediaPickerModal } from "../components/MediaPickerModal";'
+);
+
+fs.writeFileSync('src/views/YogaQuiz.tsx', yoga);
+console.log('Fixed imports');

@@ -505,7 +505,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
         {gameState === 'game_over' && renderGameOver()}
 
         {(gameState === 'playing' || gameState === 'round_over') && (
-          <div className="flex-1 w-full max-w-[1400px] mx-auto flex flex-col md:flex-row items-center justify-center gap-8 lg:gap-16 px-4 mt-8 md:mt-12 overflow-y-auto">
+          <div className="flex-1 w-full max-w-[1400px] mx-auto flex flex-col md:flex-row items-center justify-start md:justify-center gap-8 lg:gap-16 px-4 mt-8 md:mt-12 overflow-y-auto">
             
             {/* Team 1 Area */}
             <div className={`flex flex-col items-center gap-3 transition-all duration-700 ${currentPlayer === 1 ? 'scale-110 drop-shadow-[0_0_40px_rgba(59,130,246,0.8)]' : 'opacity-40 grayscale-[60%] scale-95'}`}>

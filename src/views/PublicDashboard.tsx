@@ -31,14 +31,40 @@ export function PublicDashboard({
           publicGames.push({ id: doc.id, ...doc.data() });
         });
         
-        // Sort in client to avoid needing a composite index initially
+        // Sort by date first to get the newest
         publicGames.sort((a, b) => {
-          const dateA = new Date(a.createdAt || 0).getTime();
-          const dateB = new Date(b.createdAt || 0).getTime();
-          return dateB - dateA;
+          const getTime = (val: any) => {
+            if (!val) return 0;
+            if (val.toMillis) return val.toMillis();
+            if (val.seconds) return val.seconds * 1000;
+            if (typeof val === 'number') return val;
+            if (typeof val === 'string') return new Date(val).getTime();
+            return 0;
+          };
+          return getTime(b.createdAt) - getTime(a.createdAt);
         });
-
-        setGames(publicGames);
+        
+        // Interleave by gameType to show variety at the top
+        const grouped = publicGames.reduce((acc, game) => {
+          const type = game.gameType || 'unknown';
+          if (!acc[type]) acc[type] = [];
+          acc[type].push(game);
+          return acc;
+        }, {} as Record<string, any[]>);
+        
+        const interleaved: any[] = [];
+        let added = true;
+        while (added) {
+          added = false;
+          for (const type in grouped) {
+            if (grouped[type].length > 0) {
+              interleaved.push(grouped[type].shift());
+              added = true;
+            }
+          }
+        }
+        
+        setGames(interleaved);
       } catch (error) {
         console.error("Error fetching public games:", error);
       } finally {

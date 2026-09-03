@@ -34,7 +34,7 @@ import { AlertTriangle } from "lucide-react";
 import { AuthSliderModal } from "./components/AuthSliderModal";
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<ViewState>("home");
+  const [currentView, setCurrentView] = useState<ViewState>("public-dashboard");
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -57,7 +57,7 @@ export default function App() {
 
   const handleViewChange = (view: ViewState, data?: any) => {
     if (view === "admin-dashboard" && !isAdmin) {
-      setCurrentView("home");
+      setCurrentView("public-dashboard");
       return;
     }
     setCurrentView(view);
@@ -144,7 +144,7 @@ export default function App() {
       case "flashcards-match":
         return <FlashcardsMatch onViewChange={handleViewChange} />;
       case "yoga-quiz":
-        return <YogaQuiz onViewChange={handleViewChange} />;
+        return <YogaQuiz onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "bubble-sentence-pro":
         return <BubbleSentencePro onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "family-feud":
@@ -177,16 +177,16 @@ export default function App() {
               </h2>
               <p className="text-slate-500">This view is under construction.</p>
               <button
-                onClick={() => setCurrentView("home")}
+                onClick={() => setCurrentView("public-dashboard")}
                 className="mt-6 px-6 py-2 bg-brand-purple text-white rounded-full font-medium"
               >
-                Go Home
+                Go to Community
               </button>
             </div>
           </div>
         );
       default:
-        return <Home onViewChange={handleViewChange} openAuthModal={() => setIsAuthModalOpen(true)} />;
+        return <PublicDashboard onViewChange={handleViewChange} />;
     }
   };
 
