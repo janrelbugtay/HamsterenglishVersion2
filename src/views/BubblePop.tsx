@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
 import { MediaPickerModal } from "../components/MediaPickerModal";
-import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings, Copy } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings, Copy, Flag, Volume2, VolumeX } from "lucide-react";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -126,6 +126,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   const [numPlayers, setNumPlayers] = useState(1);
   const [scores, setScores] = useState([0, 0]);
   const [questionText, setQuestionText] = useState("Loading...");
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
   
   const [combo, setCombo] = useState(0);
@@ -143,8 +144,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   const handsRef = useRef<any>(null);
   const [cameraError, setCameraError] = useState("");
   const [isCameraActive, setIsCameraActive] = useState(false);
-  const [p1Name, setP1Name] = useState("P1");
-  const [p2Name, setP2Name] = useState("P2");
+  const [p1Name, setP1Name] = useState("Team 1");
+  const [p2Name, setP2Name] = useState("Team 2");
   const [speed, setSpeed] = useState(1);
   const [showInGameSettings, setShowInGameSettings] = useState(false);
   const handleSetSpeed = (val: number) => { setSpeed(val); gameState.current.speed = val; };
@@ -152,6 +153,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   const handleSetTwistEnabled = (val: boolean) => { setTwistEnabled(val); gameState.current.twist = val; };
   const [bubbleSize, setBubbleSize] = useState(1);
   const [twistEnabled, setTwistEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const handleSetVoiceEnabled = (val: boolean) => { setVoiceEnabled(val); gameState.current.voice = val; };
   
   // Game engine state refs
   const gameState = useRef({
@@ -167,7 +170,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     questions: [] as Question[],
     speed: 1,
     size: 1,
-    twist: false
+    twist: false,
+    voice: true
   });
   
   const questionTimerRef = useRef<any>(null);
@@ -266,12 +270,30 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   };
 
   const speakText = (text: string) => {
+    if (!gameState.current.voice) return;
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const cleanedText = text.replace(/_+/g, "blank");
         const utterance = new SpeechSynthesisUtterance(cleanedText);
-        utterance.rate = 0.85; 
-        utterance.pitch = 1.1; 
+        
+        // Try to find a natural female voice
+        const voices = window.speechSynthesis.getVoices();
+        const femaleVoices = voices.filter(v => 
+            v.name.includes('Google US English') || 
+            v.name.includes('Samantha') || 
+            v.name.includes('Victoria') ||
+            v.name.includes('Karen') ||
+            v.name.includes('Tessa') ||
+            (v.name.includes('Female') && v.lang.startsWith('en')) ||
+            (v.name.includes('Zira') && v.lang.startsWith('en'))
+        );
+        
+        if (femaleVoices.length > 0) {
+            utterance.voice = femaleVoices[0];
+        }
+        
+        utterance.rate = 0.95; 
+        utterance.pitch = 1.15; 
         window.speechSynthesis.speak(utterance);
     }
   };
@@ -306,10 +328,11 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         correctPops: 0,
         wrongPops: 0,
         questionStartTime: 0,
-        questions: activeQuiz ? [...activeQuiz.questions].sort(() => 0.5 - Math.random()).slice(0, Math.min(5, activeQuiz.questions.length)) : [],
+        questions: activeQuiz ? [...activeQuiz.questions].sort(() => 0.5 - Math.random()) : [],
         speed: speed,
         size: bubbleSize,
-        twist: twistEnabled
+        twist: twistEnabled,
+        voice: voiceEnabled
     };
     
     setScores([0, 0]);
@@ -369,7 +392,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
           this.scale += (this.targetScale - this.scale) * 0.15;
           
           if (gameState.current.twist) {
-              this.vx += Math.sin(this.time) * 0.2 * (gameState.current.speed || 1);
+              this.vx = Math.sin(this.time * 2) * 5 * (gameState.current.speed || 1);
               this.x += this.vx;
           } else {
               this.x += this.vx + Math.sin(this.time) * 1.5 * (gameState.current.speed || 1);
@@ -404,6 +427,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
           let finalScale = this.scale * wobble;
           if(this.state === 'shaking') finalScale += (Math.random() - 0.5) * 0.1;
           ctx.scale(finalScale, 1/finalScale);
+          if (gameState.current.twist) {
+              ctx.rotate(this.time * 2 * (gameState.current.speed || 1));
+          }
 
           const grad = ctx.createRadialGradient(-this.radius*0.3, -this.radius*0.3, this.radius*0.1, 0, 0, this.radius);
           grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
@@ -515,16 +541,44 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   }
 
   class FloatingText {
-      x: number; y: number; text: string; color: string; life: number; vy: number; size: number;
-      constructor(x: number, y: number, text: string, color: string, isCombo = false) {
+      x: number; y: number; text: string; color: string; life: number; vy: number; vx: number; size: number;
+      targetX?: number; targetY?: number; delay: number;
+      
+      constructor(x: number, y: number, text: string, color: string, isCombo = false, targetX?: number, targetY?: number) {
           this.x = x; this.y = y; this.text = text; this.color = color;
-          this.life = 1.0; this.vy = -2; this.size = isCombo ? 60 : 40;
+          this.life = 1.5; // Longer life
+          this.size = isCombo ? 100 : 40;
+          this.targetX = targetX;
+          this.targetY = targetY;
+          this.delay = 45; // wait ~0.75s floating up before moving to target
+          this.vx = 0;
+          this.vy = -1.5; // Float up slowly initially
       }
-      update() { this.y += this.vy; this.life -= 0.015; }
+      update() { 
+          if (this.targetX !== undefined && this.targetY !== undefined) {
+              if (this.delay > 0) {
+                  this.delay--;
+                  this.y += this.vy;
+              } else {
+                  const dx = this.targetX - this.x;
+                  const dy = this.targetY - this.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  if (dist > 15) {
+                      this.vx = (dx / dist) * 25;
+                      this.vy = (dy / dist) * 25;
+                      this.x += this.vx;
+                      this.y += this.vy;
+                  }
+              }
+          } else {
+              this.y += this.vy;
+          }
+          this.life -= 0.015; 
+      }
       draw(ctx: CanvasRenderingContext2D) {
           if (this.life <= 0) return;
           ctx.save();
-          ctx.globalAlpha = this.life;
+          ctx.globalAlpha = Math.min(1, this.life); // Cap at 1
           ctx.font = `900 ${this.size}px 'Fredoka', sans-serif`;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.lineWidth = 6; ctx.strokeStyle = '#000000';
@@ -611,18 +665,12 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                 gameState.current.maxCombo = gameState.current.combo;
             }
             
-            let points = 10 * Math.min(gameState.current.combo, 4);
-            const timeTaken = Date.now() - gameState.current.questionStartTime;
-            if (timeTaken < 2000) { 
-                points += 15;
-                const w = containerRef.current?.clientWidth || 800;
-                const h = containerRef.current?.clientHeight || 600;
-                graphicsState.current.floatingTexts.push(new FloatingText(w/2, h/2 - 100, "FAST HANDS!", '#fbbf24', true));
-            }
-            
+            let points = 5;
             gameState.current.scores[playerIndex] += points;
             
-            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `+${points}`, '#4ade80'));
+            const w = containerRef.current?.clientWidth || 800;
+            const targetX = playerIndex === 0 ? 100 : w - 100;
+            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `+5`, '#4ade80', true, targetX, 80));
             
             if(gameState.current.combo > 1) {
                 setCombo(gameState.current.combo);
@@ -648,6 +696,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             
             setTimeout(() => {
                 gameState.current.currentQuestionIndex++;
+                setCurrentQuestionIndex(gameState.current.currentQuestionIndex);
                 setShowCombo(false);
                 startQuestion();
             }, 2000);
@@ -658,11 +707,13 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             gameState.current.combo = 0; 
             setShowCombo(false);
 
-            const penalty = 0;
-            // No penalty, just pop it and lose combo.
+            const penalty = 5;
+            gameState.current.scores[playerIndex] = Math.max(0, gameState.current.scores[playerIndex] - penalty);
             setScores([...gameState.current.scores]);
             
-            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `X`, '#ef4444'));
+            const w = containerRef.current?.clientWidth || 800;
+            const targetX = playerIndex === 0 ? 100 : w - 100;
+            graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `-5`, '#ef4444', true, targetX, 80));
             
             if (canvasRef.current) {
                 canvasRef.current.classList.add('shake');
@@ -988,9 +1039,14 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       </button>
         <div className="absolute top-4 right-4 z-[70] flex gap-3 pointer-events-auto">
         {screen === 'game' && (
-          <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="w-12 h-12 flex justify-center items-center rounded-full bg-white/20 dark:bg-black/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-slate-800 dark:text-white transition-all shadow-lg cursor-pointer">
-              <Settings size={20} />
-          </button>
+          <>
+            <button onClick={() => showResults()} className="w-12 h-12 flex justify-center items-center rounded-full bg-red-500/20 dark:bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md border border-red-500/50 text-red-600 dark:text-red-400 transition-all shadow-lg cursor-pointer" title="End Game Now">
+                <Flag size={20} />
+            </button>
+            <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="w-12 h-12 flex justify-center items-center rounded-full bg-white/20 dark:bg-black/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-slate-800 dark:text-white transition-all shadow-lg cursor-pointer">
+                <Settings size={20} />
+            </button>
+          </>
         )}
         <FullscreenButton targetId="game-container" className="" />
       </div>
@@ -1004,26 +1060,56 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                   </button>
               </div>
               <div className="flex flex-col gap-6">
-                  <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                      <div className="flex justify-between">
+                  <div className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                      <div className="flex justify-between items-center">
                           <span>Bubble Speed</span>
-                          <span className="text-blue-500">{speed}x</span>
+                          <div className="flex gap-2">
+                                <button onClick={() => handleSetSpeed(0.25)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 0.25 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Slow</button>
+                                <button onClick={() => handleSetSpeed(1)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 1 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Normal</button>
+                                <button onClick={() => handleSetSpeed(2.5)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 2.5 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Fast</button>
+                          </div>
                       </div>
-                      <input type="range" min="1" max="5" step="1" value={speed} onChange={e => handleSetSpeed(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                  </label>
-                  <label className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
-                      <div className="flex justify-between">
+                  </div>
+                  <div className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                      <div className="flex justify-between items-center">
                           <span>Bubble Size</span>
-                          <span className="text-blue-500">{bubbleSize}x</span>
+                          <div className="flex gap-2">
+                                <button onClick={() => handleSetBubbleSize(0.5)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 0.5 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Small</button>
+                                <button onClick={() => handleSetBubbleSize(1)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 1 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Normal</button>
+                                <button onClick={() => handleSetBubbleSize(2)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 2 ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'}`}>Big</button>
+                          </div>
                       </div>
-                      <input type="range" min="0.5" max="3" step="0.5" value={bubbleSize} onChange={e => handleSetBubbleSize(parseFloat(e.target.value))} className="w-full accent-blue-500 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                  </label>
-                  <label className="flex items-center justify-between text-slate-800 dark:text-white font-bold cursor-pointer">
-                      <span>Twist Effect</span>
-                      <input type="checkbox" checked={twistEnabled} onChange={e => handleSetTwistEnabled(e.target.checked)} className="w-6 h-6 rounded-lg accent-blue-500 cursor-pointer" />
-                  </label>
+                  </div>
+                  <div className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                        <div className="flex justify-between items-center">
+                            <span>Twist Mode</span>
+                            <button onClick={() => handleSetTwistEnabled(!twistEnabled)} className={`w-12 h-6 rounded-full transition-colors relative ${twistEnabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${twistEnabled ? 'left-7' : 'left-1'}`}></div>
+                            </button>
+                        </div>
+                  </div>
+                  <div className="flex flex-col gap-2 text-slate-800 dark:text-white font-bold">
+                        <div className="flex justify-between items-center">
+                            <span>Voice Narration</span>
+                            <button onClick={() => handleSetVoiceEnabled(!voiceEnabled)} className={`w-12 h-6 rounded-full transition-colors relative ${voiceEnabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${voiceEnabled ? 'left-7' : 'left-1'}`}></div>
+                            </button>
+                        </div>
+                  </div>
               </div>
           </div>
+      )}
+
+      {screen === 'game' && (
+        <div className="absolute bottom-4 right-4 z-[50] flex flex-col items-end pointer-events-none">
+            <div className="bg-white/80 dark:bg-black/60 backdrop-blur-md rounded-2xl px-6 py-3 shadow-lg border border-slate-200 dark:border-white/20">
+                <div className="text-slate-500 dark:text-slate-400 font-bold text-sm tracking-widest uppercase mb-1">Question</div>
+                <div className="text-3xl font-black text-slate-800 dark:text-white flex items-baseline gap-1">
+                    <span>{currentQuestionIndex + 1}</span>
+                    <span className="text-xl text-slate-400 dark:text-slate-500">/{gameState.current.questions.length}</span>
+                </div>
+            </div>
+        </div>
       )}
 
       <style>{`
@@ -1159,14 +1245,45 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     <div className="w-full max-w-md flex flex-col gap-4 mb-10">
                         <div className="flex gap-3 items-center">
                             <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(59,130,246,0.6)]">1</div>
-                            <input type="text" value={p1Name} onChange={e => setP1Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Player 1 Name" />
+                            <input type="text" value={p1Name} onChange={e => setP1Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Team 1 Name" />
                         </div>
                         {numPlayers === 2 && (
                             <div className="flex gap-3 items-center">
                                 <div className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(239,68,68,0.6)]">2</div>
-                                <input type="text" value={p2Name} onChange={e => setP2Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Player 2 Name" />
+                                <input type="text" value={p2Name} onChange={e => setP2Name(e.target.value)} className="flex-1 bg-black/20 text-white font-bold placeholder-white/50 border border-white/20 rounded-2xl px-5 py-4 outline-none focus:border-white/50 transition-colors text-lg" placeholder="Team 2 Name" />
                             </div>
                         )}
+
+                    <div className="bg-black/20 p-4 rounded-2xl border border-white/20 flex flex-col gap-4 mt-2">
+                        <div className="flex justify-between items-center text-white">
+                            <span className="font-bold">Speed</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleSetSpeed(0.25)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 0.25 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Slow</button>
+                                <button onClick={() => handleSetSpeed(1)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 1 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Normal</button>
+                                <button onClick={() => handleSetSpeed(2.5)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${speed === 2.5 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Fast</button>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center text-white">
+                            <span className="font-bold">Bubble Size</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleSetBubbleSize(0.5)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 0.5 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Small</button>
+                                <button onClick={() => handleSetBubbleSize(1)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 1 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Normal</button>
+                                <button onClick={() => handleSetBubbleSize(2)} className={`px-3 py-1 rounded-full text-sm font-bold transition-colors ${bubbleSize === 2 ? 'bg-blue-500' : 'bg-white/20 hover:bg-white/30'}`}>Big</button>
+                            </div>
+                        </div>
+                        <div className="flex justify-between items-center text-white">
+                            <span className="font-bold">Twist Mode</span>
+                            <button onClick={() => handleSetTwistEnabled(!twistEnabled)} className={`w-12 h-6 rounded-full transition-colors relative ${twistEnabled ? 'bg-blue-500' : 'bg-white/30'}`}>
+                                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${twistEnabled ? 'left-7' : 'left-1'}`}></div>
+                            </button>
+                        </div>
+                        <div className="flex justify-between items-center text-white">
+                            <span className="font-bold">Voice Narration</span>
+                            <button onClick={() => handleSetVoiceEnabled(!voiceEnabled)} className={`w-12 h-6 rounded-full transition-colors relative ${voiceEnabled ? 'bg-blue-500' : 'bg-white/30'}`}>
+                                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${voiceEnabled ? 'left-7' : 'left-1'}`}></div>
+                            </button>
+                        </div>
+                    </div>
                     </div>
 
                     <button
@@ -1229,7 +1346,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                 <div className="flex justify-between items-start w-full gap-4">
                     
                     <div className="glass-panel bg-white/90 dark:bg-slate-900/80 rounded-2xl p-4 min-w-[200px] border-l-4 border-blue-500 flex items-center gap-4 backdrop-blur-md">
-                        <div className="min-w-[3rem] px-3 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.6)]">{numPlayers === 2 ? p1Name : "P1"}</div>
+                        <div className="min-w-[3rem] px-3 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.6)]">{numPlayers === 2 ? p1Name : p1Name}</div>
                         <div>
                             <div className="text-sm font-bold text-blue-400 uppercase tracking-wider">Score</div>
                             <div className="text-3xl font-black">{scores[0]}</div>
@@ -1318,14 +1435,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                                 <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Score</div>
                                 <div className="text-3xl md:text-5xl font-black text-sky-400 drop-shadow-sm">{scores[0]}</div>
                             </div>
-                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">XP Earned</div>
-                                <div className="text-2xl md:text-4xl font-black text-fuchsia-400 drop-shadow-sm">+{xpEarned}</div>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-[#303343] p-5 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                <div className="text-slate-400 text-xs md:text-sm font-black uppercase tracking-wider mb-2">Coins Earned</div>
-                                <div className="text-2xl md:text-4xl font-black text-yellow-400 drop-shadow-sm">+{coinsEarned}</div>
-                            </div>
+                            
                         </div>
                     </>
                 ) : (
@@ -1344,16 +1454,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                             </div>
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-50 dark:bg-[#303343] p-4 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                <div className="text-slate-400 text-xs font-black uppercase tracking-wider mb-1">XP Earned</div>
-                                <div className="text-2xl font-black text-fuchsia-400 drop-shadow-sm">+{xpEarned}</div>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-[#303343] p-4 rounded-xl border border-slate-200 dark:border-white/5 shadow-inner flex flex-col items-center justify-center">
-                                <div className="text-slate-400 text-xs font-black uppercase tracking-wider mb-1">Coins Earned</div>
-                                <div className="text-2xl font-black text-yellow-400 drop-shadow-sm">+{coinsEarned}</div>
-                            </div>
-                        </div>
+                        
                     </div>
                 )}
 
