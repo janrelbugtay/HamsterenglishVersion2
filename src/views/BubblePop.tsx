@@ -941,6 +941,13 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     }
   };
 
+  
+  useEffect(() => {
+    if (screen === 'setup' && !isCameraActive && !cameraRef.current && !cameraError) {
+        setupCamera().catch(e => console.error("Initial camera setup failed:", e));
+    }
+  }, [screen, isCameraActive, cameraError]);
+
   useEffect(() => {
     if (canvasRef.current && screen === 'game') {
         const handleMouseMove = (e: MouseEvent) => {
@@ -1092,7 +1099,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
       {/* Screen: Setup */}
       {screen === 'setup' && (
-        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400 to-blue-200 dark:from-sky-900 dark:to-blue-950 flex flex-col items-center justify-center p-8 overflow-hidden">
+        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400/80 to-blue-200/80 dark:from-sky-900/80 dark:to-blue-950/80 flex flex-col items-center justify-center p-8 overflow-hidden backdrop-blur-sm">
             {/* Immersive Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
                 <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
