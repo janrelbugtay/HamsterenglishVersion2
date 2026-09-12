@@ -27,6 +27,7 @@ import { StudentRace } from "./views/StudentRace";
 import { LetterLock } from "./views/LetterLock";
 import { TicTacToe } from "./views/TicTacToe";
 import { Homework } from "./views/Homework";
+import { PhonemicMaster } from "./views/PhonemicMaster";
 import { useAuth } from "./contexts/AuthContext";
 import { doc, onSnapshot, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
@@ -161,6 +162,8 @@ export default function App() {
         return <TicTacToe onViewChange={handleViewChange} initialJoinData={joinData} />;
       case "homework":
         return <Homework onViewChange={handleViewChange} />;
+      case "phonemic-master":
+        return <PhonemicMaster onViewChange={handleViewChange} />;
       case "dashboard":
         return <UserDashboard />;
       case "public-dashboard":

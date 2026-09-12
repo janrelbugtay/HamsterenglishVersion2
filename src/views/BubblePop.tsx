@@ -7,7 +7,7 @@ import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } 
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 
-type GameScreen = 'intro' | 'lobby' | 'editor' | 'setup' | 'loading' | 'game' | 'results';
+type GameScreen = 'intro' | 'lobby' | 'editor' | 'setup' | 'loading' | 'game' | 'results' | 'study';
 
 interface PlayerData {
   level: number;
@@ -154,6 +154,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   const [bubbleSize, setBubbleSize] = useState(1);
   const [twistEnabled, setTwistEnabled] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [selectedTheme, setSelectedTheme] = useState('theme-sky');
+  const [studyIndex, setStudyIndex] = useState(0);
+  const [studySelectedOption, setStudySelectedOption] = useState<number | null>(null);
   const handleSetVoiceEnabled = (val: boolean) => { setVoiceEnabled(val); gameState.current.voice = val; };
   
   // Game engine state refs
@@ -859,6 +862,15 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             pointer.x += (pointer.targetX - pointer.x) * 0.5;
             pointer.y += (pointer.targetY - pointer.y) * 0.5;
             
+            // Constrain pointers to their respective halves in 2-player mode
+            if (gameState.current.numPlayers === 2) {
+                if (pIndex === 0) {
+                    pointer.x = Math.min(pointer.x, (width / 2) - 10);
+                } else if (pIndex === 1) {
+                    pointer.x = Math.max(pointer.x, (width / 2) + 10);
+                }
+            }
+            
             pointer.history.push({x: pointer.x, y: pointer.y});
             if (pointer.history.length > 20) pointer.history.shift();
 
@@ -949,15 +961,15 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             if (detected.length === 1) {
                 const isLeft = detected[0].x < width / 2;
                 const idx = isLeft ? 0 : 1;
-                pointers.current[idx].targetX = detected[0].x;
+                pointers.current[idx].targetX = isLeft ? Math.min(detected[0].x, (width / 2) - 10) : Math.max(detected[0].x, (width / 2) + 10);
                 pointers.current[idx].targetY = detected[0].y;
                 pointers.current[idx].detected = true;
             } else if (detected.length >= 2) {
-                pointers.current[0].targetX = detected[0].x; 
+                pointers.current[0].targetX = Math.min(detected[0].x, (width / 2) - 10); 
                 pointers.current[0].targetY = detected[0].y; 
                 pointers.current[0].detected = true;
                 
-                pointers.current[1].targetX = detected[1].x; 
+                pointers.current[1].targetX = Math.max(detected[1].x, (width / 2) + 10); 
                 pointers.current[1].targetY = detected[1].y; 
                 pointers.current[1].detected = true;
             }
@@ -976,12 +988,38 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             handsRef.current = hands;
             
             if (videoRef.current) {
-                const camera = new win.Camera(videoRef.current, {
-                    onFrame: async () => { if (videoRef.current) await hands.send({image: videoRef.current}); },
-                    width: 1280, height: 720
+                // Use standard getUserMedia for better compatibility
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' } 
                 });
-                cameraRef.current = camera;
-                await camera.start();
+                videoRef.current.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    videoRef.current.onloadedmetadata = () => resolve(null);
+                });
+                
+                await videoRef.current.play();
+                
+                let active = true;
+                const sendFrames = async () => {
+                    if (!active || !videoRef.current) return;
+                    try {
+                        await hands.send({ image: videoRef.current });
+                    } catch (err) {
+                        // ignore dropped frames
+                    }
+                    requestAnimationFrame(sendFrames);
+                };
+                sendFrames();
+                
+                cameraRef.current = {
+                    stop: () => {
+                        active = false;
+                        stream.getTracks().forEach(t => t.stop());
+                        if (videoRef.current) videoRef.current.srcObject = null;
+                    }
+                };
+                
                 setIsCameraActive(true);
             }
         }
@@ -1038,7 +1076,97 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         <ArrowLeft size={24} />
       </button>
         <div className="absolute top-4 right-4 z-[70] flex gap-3 pointer-events-auto">
-        {screen === 'game' && (
+              {screen === 'study' && activeQuiz && (
+        <div 
+            className="absolute inset-0 z-50 flex flex-col bg-white overflow-hidden" 
+            id="study-container"
+        >
+            <div className="absolute top-4 left-4 z-20">
+                <button 
+                    onClick={() => {
+                        setScreen('setup');
+                        setStudyIndex(0);
+                        setStudySelectedOption(null);
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 rounded-full shadow-sm text-slate-600 font-bold transition-colors cursor-pointer"
+                >
+                    <ArrowLeft size={24} /> Back
+                </button>
+            </div>
+            <div className="absolute top-4 right-4 z-20 text-slate-600 [&>button]:bg-slate-100 [&>button]:hover:bg-slate-200">
+                <FullscreenButton targetId="study-container" />
+            </div>
+
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-slate-400 font-bold text-xl bg-slate-100 px-6 py-2 rounded-full z-10">
+                {studyIndex + 1} / {activeQuiz.questions.length}
+            </div>
+
+            <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-12 w-full h-full max-w-5xl mx-auto">
+                {activeQuiz.questions.length > 0 ? (
+                    <>
+                        <h1 className="text-4xl sm:text-6xl font-black text-slate-800 tracking-tight leading-tight text-center max-w-full break-words drop-shadow-sm mb-12">
+                            {activeQuiz.questions[studyIndex]?.text}
+                        </h1>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-3xl">
+                            {activeQuiz.questions[studyIndex]?.options.map((opt, i) => {
+                                const isSelected = studySelectedOption === i;
+                                const isCorrect = i === activeQuiz.questions[studyIndex].answerIndex;
+                                const showAsCorrect = studySelectedOption !== null && isCorrect;
+                                const showAsIncorrect = studySelectedOption !== null && isSelected && !isCorrect;
+
+                                return (
+                                    <button
+                                        key={i}
+                                        onClick={() => {
+                                            if (studySelectedOption === null) {
+                                                setStudySelectedOption(i);
+                                            }
+                                        }}
+                                        disabled={studySelectedOption !== null}
+                                        className={`relative p-6 sm:p-8 rounded-[2rem] text-2xl sm:text-3xl font-bold transition-all duration-300 transform ${
+                                            showAsCorrect ? 'bg-green-500 text-white shadow-[0_0_40px_rgba(34,197,94,0.4)] scale-105 z-10' :
+                                            showAsIncorrect ? 'bg-red-500 text-white opacity-90 scale-95' :
+                                            studySelectedOption !== null ? 'bg-slate-100 text-slate-400 opacity-50' :
+                                            'bg-white text-slate-700 hover:bg-slate-50 hover:scale-105 hover:shadow-xl shadow-lg border-2 border-slate-100'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-center gap-4">
+                                            {opt}
+                                            {showAsCorrect && <span className="text-4xl animate-bounce">✅</span>}
+                                            {showAsIncorrect && <span className="text-4xl">❌</span>}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className={`mt-12 h-20 transition-all duration-500 ${studySelectedOption !== null ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                            <button
+                                onClick={() => {
+                                    if (studyIndex < activeQuiz.questions.length - 1) {
+                                        setStudyIndex(studyIndex + 1);
+                                        setStudySelectedOption(null);
+                                    } else {
+                                        setScreen('setup');
+                                        setStudyIndex(0);
+                                        setStudySelectedOption(null);
+                                    }
+                                }}
+                                className="px-12 py-5 bg-blue-500 hover:bg-blue-600 text-white font-black text-2xl rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95"
+                            >
+                                {studyIndex < activeQuiz.questions.length - 1 ? 'Next Question →' : 'Finish Study'}
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-slate-500 text-3xl font-bold">No questions in this quiz!</div>
+                )}
+            </div>
+        </div>
+      )}
+
+      {screen === 'game' && (
           <>
             <button onClick={() => showResults()} className="w-12 h-12 flex justify-center items-center rounded-full bg-red-500/20 dark:bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md border border-red-500/50 text-red-600 dark:text-red-400 transition-all shadow-lg cursor-pointer" title="End Game Now">
                 <Flag size={20} />
@@ -1185,7 +1313,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
       {/* Screen: Setup */}
       {screen === 'setup' && (
-        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400/80 to-blue-200/80 dark:from-sky-900/80 dark:to-blue-950/80 flex flex-col items-center justify-center p-8 overflow-hidden backdrop-blur-sm">
+        <div className={`absolute inset-0 z-40 flex flex-col items-center justify-center p-8 overflow-hidden backdrop-blur-sm transition-colors duration-1000 ${selectedTheme === "theme-ocean" ? "bg-gradient-to-b from-sky-600/90 to-cyan-600/90 dark:from-sky-800/90 dark:to-cyan-900/90" : selectedTheme === "theme-space" ? "bg-gradient-to-b from-slate-900/90 to-indigo-950/90" : selectedTheme === "theme-jungle" ? "bg-gradient-to-b from-green-600/90 to-emerald-400/90 dark:from-green-900/90 dark:to-emerald-800/90" : selectedTheme === "theme-sunset" ? "bg-gradient-to-b from-orange-400/90 to-yellow-300/90 dark:from-orange-800/90 dark:to-yellow-700/90" : "bg-gradient-to-b from-sky-400/90 to-blue-200/90 dark:from-sky-900/90 dark:to-blue-950/90"}`}>
             {/* Immersive Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
                 <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
@@ -1224,7 +1352,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     Bubble Pop
                 </h2>
                 
-                <div className="w-full max-w-2xl bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-[2rem] border border-white/20 p-8 shadow-2xl mb-8 flex flex-col items-center relative z-10">
+                <div className="flex flex-col xl:flex-row gap-6 w-full max-w-7xl justify-center items-stretch relative z-10">
+    <div className="flex-1 w-full max-w-2xl bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-[2rem] border border-white/20 p-8 shadow-2xl flex flex-col items-center">
+
                     <div className="flex gap-6 mb-8 w-full justify-center">
                         <button
                             onClick={() => setNumPlayers(1)}
@@ -1240,8 +1370,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                             <div className="text-5xl bg-red-500 w-20 h-20 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(239,68,68,0.6)]">👥</div>
                             <span className="text-white font-bold text-2xl">2 Players</span>
                         </button>
-                    </div>
 
+                                        </div>
                     <div className="w-full max-w-md flex flex-col gap-4 mb-10">
                         <div className="flex gap-3 items-center">
                             <div className="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xl shadow-[0_0_15px_rgba(59,130,246,0.6)]">1</div>
@@ -1292,7 +1422,45 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     >
                         START GAME
                     </button>
-                </div>
+    </div>
+
+    <div className="w-full xl:w-96 flex flex-col gap-6">
+        <div className="w-full rounded-[2rem] bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/20 shadow-2xl p-6 flex flex-col justify-center flex-1">
+            <h3 className="text-2xl font-black text-white mb-4 text-center drop-shadow-md">Choose Theme</h3>
+            <div className="grid grid-cols-2 gap-3">
+                {[
+                    { id: 'theme-sky', name: 'Sky', icon: '☁️' },
+                    { id: 'theme-ocean', name: 'Ocean', icon: '🌊' },
+                    { id: 'theme-space', name: 'Space', icon: '🚀' },
+                    { id: 'theme-jungle', name: 'Jungle', icon: '🌴' },
+                    { id: 'theme-sunset', name: 'Sunset', icon: '🌅' }
+                ].map(t => (
+                    <button
+                        key={t.id}
+                        onClick={() => setSelectedTheme(t.id)}
+                        className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all shadow-sm font-bold text-sm ${selectedTheme === t.id ? 'bg-white text-blue-600 border-2 border-blue-400 scale-105' : 'bg-white/20 text-white border-2 border-transparent hover:bg-white/30'}`}
+                    >
+                        <span className="text-2xl">{t.icon}</span>
+                        {t.name}
+                    </button>
+                ))}
+            </div>
+        </div>
+
+        <button onClick={() => setScreen('study')} className="group relative w-full h-48 rounded-[2rem] bg-white/10 dark:bg-black/20 backdrop-blur-md border border-white/20 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-1 cursor-pointer flex items-center justify-center p-6 gap-6">
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
+            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-purple-400/30 rounded-full blur-2xl group-hover:bg-purple-400/50 transition-colors"></div>
+            
+            <div className="relative z-10 text-7xl transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500 drop-shadow-xl">
+                📖
+            </div>
+            <div className="flex flex-col items-start relative z-10 text-left">
+                <h3 className="text-3xl font-black text-white mb-1 drop-shadow-md">Study Mode</h3>
+                <p className="text-purple-100 font-medium text-sm">Review Questions!</p>
+            </div>
+        </button>
+    </div>
+</div>
 
                 <div className="flex flex-wrap justify-center gap-4 relative z-10">
                   <button onClick={() => onViewChange('games')} className="px-8 py-4 rounded-full bg-white/20 backdrop-blur-md shadow-lg hover:bg-white/30 text-xl font-bold text-white border border-white/40 cursor-pointer transition-all hover:scale-105 active:scale-95 flex items-center gap-2">
@@ -1339,7 +1507,13 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
       {/* Screen: Game */}
       {screen === 'game' && (
         <div className="absolute inset-0 z-30 flex flex-col">
-            {!isCameraActive && <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_100%,#dbeafe,#f8fafc)] dark:bg-[radial-gradient(circle_at_50%_100%,#1e3a8a,#0f172a)] -z-10 pointer-events-none"></div>}
+            {!isCameraActive && <div className={`absolute inset-0 -z-10 pointer-events-none transition-colors duration-1000 ${
+    selectedTheme === "theme-ocean" ? "bg-gradient-to-b from-sky-600 to-cyan-600 dark:from-sky-800 dark:to-cyan-900" :
+    selectedTheme === "theme-space" ? "bg-gradient-to-b from-slate-900 to-indigo-950" :
+    selectedTheme === "theme-jungle" ? "bg-gradient-to-b from-green-600 to-emerald-400 dark:from-green-900 dark:to-emerald-800" :
+    selectedTheme === "theme-sunset" ? "bg-gradient-to-b from-orange-400 to-yellow-300 dark:from-orange-800 dark:to-yellow-700" :
+    "bg-[radial-gradient(circle_at_50%_100%,#dbeafe,#f8fafc)] dark:bg-[radial-gradient(circle_at_50%_100%,#1e3a8a,#0f172a)]"
+}`}></div>}
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10"></canvas>
 
             <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none z-20 pt-20">

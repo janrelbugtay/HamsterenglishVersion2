@@ -20,7 +20,8 @@ export type ViewState =
   | "student-race"
   | "letter-lock"
   | "tic-tac-toe"
-  | "homework";
+  | "homework"
+  | "phonemic-master";
 
 export interface Game {
   id: string;

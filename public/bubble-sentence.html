@@ -311,6 +311,19 @@
             }
         }
 
+        @keyframes floatUp {
+        0% { opacity: 1; transform: translateY(0) scale(1); }
+        100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
+    }
+    .floating-score {
+        position: absolute;
+        font-weight: 900;
+        font-size: 2rem;
+        pointer-events: none;
+        animation: floatUp 1s ease-out forwards;
+        z-index: 1000;
+        text-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
     </style>
 
 <script>
@@ -324,7 +337,16 @@ window.onerror = function(message, source, lineno, colno, error) {
     errorDiv.style.color = 'white';
     errorDiv.style.padding = '10px';
     errorDiv.style.fontSize = '16px';
-    errorDiv.innerText = message + ' at ' + lineno + ':' + colno + ' ' + (error && error.stack ? error.stack : '');
+    
+    let strMsg = message;
+    if (typeof message === 'object') {
+        try { strMsg = JSON.stringify(message); } catch(e) { strMsg = String(message); }
+    }
+    if (error && typeof error === 'object' && !error.stack) {
+        try { strMsg += " " + JSON.stringify(error); } catch(e) {}
+    }
+    errorDiv.innerText = strMsg + ' at ' + lineno + ':' + colno + ' ' + (error && error.stack ? error.stack : '');
+    
     document.body.appendChild(errorDiv);
 };
 window.onunhandledrejection = function(event) {
@@ -374,15 +396,7 @@ window.onunhandledrejection = function(event) {
     </div>
     <div id="screen-menu" class="screen active relative overflow-hidden">
         <!-- Top Bar Profile -->
-        <div class="absolute top-4 left-4 z-20 flex gap-4">
-            <div class="glass px-4 py-2 rounded-2xl flex items-center gap-3 cursor-pointer hover:scale-105 transition-transform" onclick="Game.showScreen('screen-shop')">
-                <div class="text-4xl bg-white rounded-full h-12 w-12 flex items-center justify-center shadow-inner" id="ui-avatar">🐧</div>
-                <div>
-                    <div class="text-white font-black text-lg drop-shadow-md" id="ui-player-name">Student</div>
-                    
-                </div>
-            </div>
-        </div>
+        
 
         <div class="absolute top-4 right-4 z-20 flex gap-2">
             <button onclick="Game.showScreen('screen-editor')" class="btn-premium px-6 py-3 text-sm hidden">👨‍🏫 Game Setup</button>
@@ -478,23 +492,21 @@ window.onunhandledrejection = function(event) {
 
             <!-- Left Controls -->
             <div class="absolute top-4 left-4 flex flex-row gap-2 pointer-events-auto">
-                <button onclick="Game.quitGame()" class="btn-premium quit-btn bg-gradient-to-b from-gray-200 to-gray-300 text-gray-700 border-gray-100 px-6 py-3 text-lg shadow-[0_10px_0_#9ca3af,0_15px_20px_rgba(0,0,0,0.2)] flex items-center gap-2"><span>🔙 Menu</span></button>
-                <button onclick="Game.pauseGame()" class="btn-premium quit-btn bg-gradient-to-b from-blue-200 to-blue-300 text-blue-700 border-blue-100 px-6 py-3 text-lg shadow-[0_10px_0_#93c5fd,0_15px_20px_rgba(0,0,0,0.2)] flex items-center gap-2"><span>⚙️ Settings</span></button>
+                <button onclick="Game.quitGame()" class="btn-premium quit-btn bg-gradient-to-b from-gray-200 to-gray-300 text-gray-700 border-gray-100 w-14 h-14 flex items-center justify-center text-2xl shadow-[0_10px_0_#9ca3af,0_15px_20px_rgba(0,0,0,0.2)] rounded-2xl shrink-0" title="Back to Menu">🔙</button>
+                <button onclick="Game.pauseGame()" class="btn-premium quit-btn bg-gradient-to-b from-blue-200 to-blue-300 text-blue-700 border-blue-100 w-14 h-14 flex items-center justify-center text-2xl shadow-[0_10px_0_#93c5fd,0_15px_20px_rgba(0,0,0,0.2)] rounded-2xl shrink-0" title="Settings">⚙️</button>
             </div>
             
             <!-- Teams and Timer Wrapper -->
             <div class="absolute top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-6 pointer-events-none w-full justify-center max-w-full px-4 overflow-x-auto" style="scrollbar-width: none;">
                 <div id="teams-container" class="flex items-center gap-4 pointer-events-auto">
-                    <!-- Teams injected here -->
-                </div>
-                
-                <!-- Circular Timer -->
-                <div class="relative w-24 h-24 flex items-center justify-center shrink-0 pointer-events-auto" id="timer-container">
-                    <svg class="absolute inset-0 w-full h-full drop-shadow-md" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.8)" stroke="#e5e7eb" stroke-width="8"/>
-                        <circle id="ui-timer-ring" cx="50" cy="50" r="45" fill="none" stroke="#4ade80" stroke-width="8" class="timer-ring-circle" stroke-dasharray="283" stroke-dashoffset="0"/>
-                    </svg>
-                    <span id="ui-timer-text" class="text-2xl font-black text-gray-800 z-10 drop-shadow-sm">∞</span>
+                    <!-- Circular Timer -->
+                    <div class="relative w-24 h-24 flex items-center justify-center shrink-0 pointer-events-auto" id="timer-container" style="order: 999;">
+                        <svg class="absolute inset-0 w-full h-full drop-shadow-md" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.8)" stroke="#e5e7eb" stroke-width="8"/>
+                            <circle id="ui-timer-ring" cx="50" cy="50" r="45" fill="none" stroke="#4ade80" stroke-width="8" class="timer-ring-circle" stroke-dasharray="283" stroke-dashoffset="0"/>
+                        </svg>
+                        <span id="ui-timer-text" class="text-2xl font-black text-gray-800 z-10 drop-shadow-sm">∞</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -691,6 +703,11 @@ window.onunhandledrejection = function(event) {
                     <label class="font-bold text-gray-700">Sound Effects</label>
                     <input type="checkbox" id="setting-sound-effects" class="w-6 h-6" onchange="Settings.update('soundEffects', this.checked)">
                 </div>
+                <!-- Enable Powerups -->
+                <div class="flex items-center justify-between">
+                    <label class="font-bold text-gray-700">Enable Powerups</label>
+                    <input type="checkbox" id="setting-powerups" class="w-6 h-6" onchange="Settings.update('powerupsEnabled', this.checked)">
+                </div>
 
                 <!-- Response Time -->
                 <div class="flex items-center justify-between">
@@ -771,6 +788,11 @@ window.onunhandledrejection = function(event) {
                 <div class="flex items-center justify-between">
                     <label class="text-sm font-bold text-gray-500">Sound Effects</label>
                     <input type="checkbox" id="setting-sound-effects-pause" class="w-6 h-6" onchange="Settings.update('soundEffects', this.checked)">
+                </div>
+                <!-- Enable Powerups -->
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-bold text-gray-500">Enable Powerups</label>
+                    <input type="checkbox" id="setting-powerups-pause" class="w-6 h-6" onchange="Settings.update('powerupsEnabled', this.checked)">
                 </div>
 
                 <!-- Response Time -->
@@ -1070,6 +1092,10 @@ var Settings = {
                 } else if (key === 'teamsEnabled') {
                     Storage.data.profile.settings.teamsEnabled = val;
                     Game.toggleClassroomMode(val);
+                } else if (key === 'powerupsEnabled') {
+                    Storage.data.profile.settings.powerupsEnabled = val;
+                    const pc = document.querySelector('.powerups-container');
+                    if (pc) pc.style.display = val ? 'flex' : 'none';
                 } else if (key === 'theme') {
                     Storage.setTheme(val);
                 }
@@ -1098,6 +1124,10 @@ var Settings = {
                 byId('setting-response-time-pause', s.responseTime || 'default');
 
                 byId('setting-teams', !!s.teamsEnabled, 'checked');
+                byId('setting-powerups', s.powerupsEnabled !== false, 'checked');
+                byId('setting-powerups-pause', s.powerupsEnabled !== false, 'checked');
+                const pc = document.querySelector('.powerups-container');
+                if (pc) pc.style.display = (s.powerupsEnabled !== false) ? 'flex' : 'none';
                 
                 byId('setting-volume-pause', s.volume || 50);
                 byText('ui-volume-val-pause', (s.volume || 50) + '%');
@@ -1210,9 +1240,7 @@ var Game = {
                             <span class="text-6xl drop-shadow-md mb-2">${cat.icon}</span>
                             
                         </div>
-                        <div class="mt-3 bg-black/60 text-white font-black px-4 py-2 rounded-full backdrop-blur-sm text-center shadow-lg border-2 border-white/20">
-                            ${cat.name}
-                        </div>
+                        
                     `;
                     island.onclick = () => this.openLobby(cat.id);
                     container.appendChild(island);
@@ -1290,7 +1318,8 @@ var Game = {
                 // Disabled.
             },
             startGameFromLobby() {
-                this.classroomMode = window.teamsData && window.teamsData.length > 1;
+                window.currentTeamIndex = 0;
+                this.classroomMode = window.teamsData && window.teamsData.length > 0;
                 if (this.selectedCatId) {
                     this.start(this.selectedCatId);
                 }
@@ -1367,6 +1396,7 @@ var Game = {
                 
                 document.getElementById('game-body').style.animation = 'none';
                 ring.style.stroke = '#4ade80'; // Green
+                text.style.color = ''; // Reset text color
                 
                 let responseTimeStr = 'default';
                 if(window.Storage && Storage.data && Storage.data.profile && Storage.data.profile.settings) {
@@ -1408,7 +1438,54 @@ var Game = {
                     if(this.timeLeft <= 0) {
                         clearInterval(this.timerInterval);
                         Audio.wrong(); Mascot.react('sad');
-                        this.levelTimeout = setTimeout(()=>this.loadLevel(), 2000); // Fail level, reload same
+                        
+                        let unplacedCount = 0;
+                        this.slots.forEach((slot, index) => {
+                            if (!slot.filled) {
+                                unplacedCount++;
+                                // Find an un-snapped bubble for this slot
+                                const b = this.bubbles.find(bubble => !bubble.snapped && bubble.wordText === slot.w);
+                                if (b) {
+                                    b.snapped = true;
+                                    b.el.style.transform = 'none'; b.el.style.position = 'relative';
+                                    b.el.style.left='auto'; b.el.style.top='auto';
+                                    b.el.classList.add('snapped');
+                                    // Make it look slightly faded/tinted to indicate it was auto-placed
+                                    b.el.style.opacity = '0.7';
+                                    b.el.style.pointerEvents = 'none';
+                                    
+                                    slot.el.innerHTML=''; 
+                                    slot.el.appendChild(b.el); 
+                                    slot.el.classList.remove('highlight');
+                                    slot.filled = true;
+                                } else {
+                                    // Fallback just in case
+                                    slot.el.innerHTML = '<span class="text-gray-400 font-bold">' + slot.w + '</span>';
+                                    slot.el.style.backgroundColor = '#f1f5f9';
+                                }
+                            }
+                        });
+
+                        // Pop any leftover floating bubbles (should be none ideally)
+                        this.bubbles.forEach(b => {
+                            if (!b.snapped) {
+                                Particles.spawn(parseFloat(b.el.style.left) || window.innerWidth/2, parseFloat(b.el.style.top) || window.innerHeight/2, 10, '#ef4444');
+                                b.el.remove();
+                            }
+                        });
+
+                        if (this.classroomMode && window.teamsData && window.teamsData.length > 0) {
+                            const team = window.teamsData[window.currentTeamIndex];
+                            if (team && unplacedCount > 0) {
+                                updateTeamScore(team.id, -unplacedCount);
+                                if (typeof renderTeams === 'function') renderTeams();
+                            }
+                            
+                            window.currentTeamIndex = (window.currentTeamIndex + 1) % window.teamsData.length;
+                            if (typeof renderTeams === 'function') renderTeams();
+                        }
+
+                        this.levelTimeout = setTimeout(()=>this.idxComplete(), 3000); 
                     }
                 }, 1000);
             },
@@ -1421,7 +1498,7 @@ var Game = {
                     s.className = 'word-slot shadow-inner relative';
                     s.dataset.w = w;
                     con.appendChild(s);
-                    this.slots.push({ el: s, w: w, filled: false });
+                    this.slots.push({ el: s, w: w, filled: false, isCorrectlyFilled: false });
                 });
             },
             createBubbles() {
@@ -1520,8 +1597,9 @@ var Game = {
                         this.dragB = null;
                         
                         if (clickedB.isClick) {
-                            const nextI = this.slots.findIndex(s => !s.filled);
+                            const nextI = this.slots.findIndex(s => !s.isCorrectlyFilled);
                             if (nextI !== -1) {
+                                if (this.slots[nextI].filled) return; // Wait for wrong bubble to pop out
                                 if (this.slots[nextI].w === clickedB.wordText) {
                                     this.correct(clickedB, this.slots[nextI]);
                                 } else {
@@ -1539,7 +1617,9 @@ var Game = {
                 const wordText = b.wordText;
                 
                 // Only allow dropping on the next available slot in order
-                const nextSlot = this.slots.find(s => !s.filled);
+                const nextI = this.slots.findIndex(s => !s.isCorrectlyFilled);
+                const nextSlot = nextI !== -1 ? this.slots[nextI] : null;
+                if (nextSlot && nextSlot.filled) return; // Wait for wrong bubble
                 if (nextSlot) {
                     const r = nextSlot.el.getBoundingClientRect();
                     // Check if dropped near the next available slot
@@ -1569,14 +1649,15 @@ var Game = {
             },
 
             correct(b, slot) {
-                b.snapped = true; slot.filled = true; this.placed++;
+                b.snapped = true; slot.filled = true; slot.isCorrectlyFilled = true; this.placed++;
                 Audio.snap(); Mascot.react('happy');
                 const r = slot.el.getBoundingClientRect();
                 Particles.spawn(r.left + r.width/2, r.top + r.height/2, 20, '#4ade80');
                 
                 b.el.style.transform = 'none'; b.el.style.position = 'relative';
-                b.el.style.left='auto'; b.el.style.top='auto';
-                b.el.classList.add('snapped');
+                b.el.style.transform = 'none'; b.el.style.position = 'relative';
+                                    b.el.style.left='auto'; b.el.style.top='auto';
+                                    b.el.classList.add('snapped');
                 slot.el.innerHTML=''; slot.el.appendChild(b.el); slot.el.classList.remove('highlight');
                 
                 // Scoring
@@ -1585,13 +1666,28 @@ var Game = {
                     this.score += (100 * diffMulti) + (this.combo * 50);
                     this.combo++; if(this.combo > this.maxCombo) this.maxCombo = this.combo;
                     
-                    // Classroom Mode Add Points (Handled manually by teacher clicks now)
+                    // Classroom Mode Add Points
                     b.hasScored = true;
+                    if (this.classroomMode && window.teamsData && window.teamsData.length > 0) {
+                        const team = window.teamsData[window.currentTeamIndex];
+                        if (team) {
+                            updateTeamScore(team.id, 1);
+                            if (typeof renderTeams === 'function') renderTeams();
+                        }
+                    }
                 }
 
                 this.updateScore(); this.updateHints(); this.checkComboEffects();
                 
                 if(this.placed === this.words.length) {
+                    if (this.classroomMode && window.teamsData && window.teamsData.length > 0) {
+                        const team = window.teamsData[window.currentTeamIndex];
+                        if (team) {
+                            // Removed +5 point bonus for completing the sentence
+                            window.currentTeamIndex = (window.currentTeamIndex + 1) % window.teamsData.length;
+                            if (typeof renderTeams === 'function') renderTeams();
+                        }
+                    }
                     clearInterval(this.timerInterval);
                     this.levelTimeout = setTimeout(()=>this.idxComplete(), 500);
                 }
@@ -1600,7 +1696,7 @@ var Game = {
                 if(!b.snapped) return;
                 const slot = this.slots.find(s => s.el.contains(b.el));
                 if (slot && slot.filled) {
-                    slot.filled = false;
+                    slot.filled = false; slot.isCorrectlyFilled = false;
                     if (!b.isError) {
                         this.placed--;
                     }
@@ -1656,6 +1752,14 @@ var Game = {
                 setTimeout(() => Audio.wrong(), 200); // Play wrong sound right after snap
                 Mascot.react('sad');
                 this.combo = 0; this.mistakes++; this.updateScore();
+                if (this.classroomMode && window.teamsData && window.teamsData.length > 0) {
+                    const team = window.teamsData[window.currentTeamIndex];
+                    if (team) {
+                        updateTeamScore(team.id, -1);
+                        if (typeof renderTeams === 'function') renderTeams();
+                        if (typeof renderTeams === 'function') renderTeams();
+                    }
+                }
                 
                 b.el.classList.add('wrong-shake'); // CSS shake
                 b.isError = true;
@@ -1689,7 +1793,7 @@ var Game = {
             updateHints() {
                 if(!this.hintsEnabled) return;
                 this.slots.forEach(s=>s.el.classList.remove('highlight'));
-                const n = this.slots.find(s=>!s.filled);
+                const n = this.slots.find(s=>!s.isCorrectlyFilled);
                 if(n) n.el.classList.add('highlight');
             },
             usePowerup(type) {
@@ -1730,7 +1834,7 @@ var Game = {
                 }
             },
             showHint() {
-                const n = this.slots.find(s=>!s.filled);
+                const n = this.slots.find(s=>!s.isCorrectlyFilled && !s.filled);
                 if(n) {
                     const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
                     if(b) {
@@ -1749,7 +1853,7 @@ var Game = {
                 }
             },
             showAnswer() {
-                const n = this.slots.find(s=>!s.filled);
+                const n = this.slots.find(s=>!s.isCorrectlyFilled && !s.filled);
                 if(n) {
                     const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
                     if(b) {
@@ -1758,7 +1862,7 @@ var Game = {
                 }
             },
             showAllAnswers() {
-                const unfurls = this.slots.filter(s => !s.filled);
+                const unfurls = this.slots.filter(s => !s.isCorrectlyFilled && !s.filled);
                 unfurls.forEach((n, idx) => {
                     setTimeout(() => {
                         const b = this.bubbles.find(b => !b.snapped && b.wordText === n.w);
@@ -2126,16 +2230,27 @@ var Editor = {
             }
         };
 
-        window.addEventListener('message', e => { if (!e.data || typeof e.data !== 'object') return; if (e.data.type === 'LOAD_GAME') {
-                Storage.data.categories = [{ id: 'cat_1', name: e.data.data.topic || 'Custom Lesson', icon: '📚', timer: 60, color: '#4285F4', x: 50, y: 50 }];
-                Storage.data.sentences = e.data.data.sentences.map(s => ({ ...s, id: 's_'+Math.random(), catId: 'cat_1' }));
-                Storage.data.mode = e.data.data.mode || 'word';
-                Storage.save();
-                Game.buildWorldMap();
-                Game.openLobby('cat_1');
+        window.addEventListener('message', e => { 
+            if (!e.data || typeof e.data !== 'object') return; 
+            if (e.data.type === 'LOAD_GAME') {
+                try {
+                    const d = e.data.data || {};
+                    const sentences = d.sentences || d.customSentences || [];
+                    Storage.data.categories = [{ id: 'cat_1', name: d.topic || 'Custom Lesson', icon: '📚', timer: 60, color: '#4285F4', x: 50, y: 50 }];
+                    Storage.data.sentences = sentences.map(s => ({ ...s, id: 's_'+Math.random(), catId: 'cat_1' }));
+                    Storage.data.mode = d.mode || 'word';
+                    if (d.theme) {
+                        Storage.setTheme(d.theme);
+                    }
+                    Storage.save();
+                    Game.buildWorldMap();
+                    Game.openLobby('cat_1');
+                } catch(err) {
+                    console.error("Error processing LOAD_GAME:", err, e.data);
+                }
             }
         });
-        window.onload = () => { Game.init(); Editor.init(); Game.showScreen('screen-loading'); window.parent.postMessage({type: 'IFRAME_READY'}, '*'); };
+        document.addEventListener('DOMContentLoaded', () => { Game.init(); Editor.init(); Game.showScreen('screen-loading'); window.parent.postMessage({type: 'IFRAME_READY'}, '*'); setTimeout(() => { if(document.getElementById('screen-loading').classList.contains('active')) { Game.showScreen('screen-menu'); } }, 500); });
     </script>
 
     <script>
@@ -2215,19 +2330,83 @@ var Editor = {
         function updateTeamScore(id, delta) {
             const team = window.teamsData.find(t => t.id === id);
             if (!team) return;
-            team.score = Math.max(0, team.score + delta);
+            team.score = team.score + delta;
+            
+            // Floating text animation
+            const scoreEl = document.getElementById('score-team' + id);
+            if (scoreEl) {
+                scoreEl.innerText = team.score;
+                const rect = scoreEl.getBoundingClientRect();
+                const floatEl = document.createElement('div');
+                floatEl.className = 'floating-score font-black drop-shadow-xl text-5xl'; floatEl.style.zIndex = '9999'; floatEl.style.position = 'fixed';
+                floatEl.innerText = delta > 0 ? '+' + delta : delta;
+                floatEl.style.color = delta > 0 ? '#4ade80' : '#ef4444';
+                floatEl.style.left = (rect.left + rect.width / 2 - 10) + 'px';
+                floatEl.style.top = rect.top + 'px';
+                document.body.appendChild(floatEl);
+                setTimeout(() => floatEl.remove(), 1000);
+            }
+            
             if (delta > 0) {
                 if (!window.isSoundMuted && typeof Audio !== 'undefined' && Audio.coin) Audio.coin();
                 if (typeof Particles !== 'undefined') {
-                    const xOffset = id % 2 === 0 ? 150 : -150;
+                    const rect = scoreEl ? scoreEl.getBoundingClientRect() : { left: window.innerWidth/2, top: 80 };
                     const hexColors = { blue: '#3b82f6', red: '#ef4444', green: '#22c55e', yellow: '#eab308', purple: '#a855f7', pink: '#ec4899' };
-                    Particles.spawn(window.innerWidth/2 + xOffset, 80, 10, hexColors[team.color] || '#3b82f6', 'sparkle', 1.5);
+                    Particles.spawn(rect.left, rect.top, 10, hexColors[team.color] || '#3b82f6', 'sparkle', 1.5);
                 }
             }
             renderTeams();
         }
         
         
+
+        function renderTeams() {
+            const container = document.getElementById('teams-container');
+            const timer = document.getElementById('timer-container');
+            if (!container) return;
+            
+            // Save timer element if it's there
+            if (timer && timer.parentNode === container) {
+                container.removeChild(timer);
+            }
+            
+            const middleIndex = Math.ceil(window.teamsData.length / 2);
+            if (timer) {
+                timer.style.order = middleIndex * 10;
+            }
+            
+            let html = '';
+            window.teamsData.forEach((t, i) => {
+                const colorMap = {
+                    blue: 'background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.3), inset 4px 8px 12px rgba(255,255,255,0.6), 0 10px 20px rgba(37,99,235,0.4); color: white; border: 4px solid rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.4);',
+                    red: 'background: radial-gradient(circle at 30% 30%, #f87171, #dc2626); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.3), inset 4px 8px 12px rgba(255,255,255,0.6), 0 10px 20px rgba(220,38,38,0.4); color: white; border: 4px solid rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.4);',
+                    green: 'background: radial-gradient(circle at 30% 30%, #4ade80, #16a34a); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.3), inset 4px 8px 12px rgba(255,255,255,0.6), 0 10px 20px rgba(22,163,74,0.4); color: white; border: 4px solid rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.4);',
+                    yellow: 'background: radial-gradient(circle at 30% 30%, #fde047, #eab308); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.2), inset 4px 8px 12px rgba(255,255,255,0.8), 0 10px 20px rgba(234,179,8,0.4); color: #713f12; border: 4px solid rgba(255,255,255,0.9);',
+                    purple: 'background: radial-gradient(circle at 30% 30%, #c084fc, #9333ea); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.3), inset 4px 8px 12px rgba(255,255,255,0.6), 0 10px 20px rgba(147,51,234,0.4); color: white; border: 4px solid rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.4);',
+                    pink: 'background: radial-gradient(circle at 30% 30%, #f472b6, #db2777); box-shadow: inset -4px -8px 12px rgba(0,0,0,0.3), inset 4px 8px 12px rgba(255,255,255,0.6), 0 10px 20px rgba(219,39,119,0.4); color: white; border: 4px solid rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.4);'
+                };
+                const bubbleStyle = colorMap[t.color];
+                const isCurrentTurn = window.currentTeamIndex === i;
+                const turnClass = isCurrentTurn ? 'ring-8 ring-white ring-offset-4 ring-offset-blue-300 scale-[1.15] z-20' : 'opacity-80 scale-95';
+                
+                const order = (i < middleIndex) ? (i * 10) : (i * 10 + 10);
+                
+                html += `
+                    <div class="flex items-center gap-1 group shrink-0" style="order: ${order}; margin: 0 15px;">
+                        <div class="team-score px-10 py-6 min-w-[320px] justify-center rounded-full font-black transform transition-all duration-300 flex items-center gap-4 ${turnClass}" style="${bubbleStyle}; font-size: 5vh; line-height: 1.1;">
+                            <span class="truncate max-w-[220px] pb-1 drop-shadow-lg">${t.name}</span>
+                            <span class="bg-black/20 px-6 py-2 rounded-full shadow-inner pb-3" id="score-team${t.id}">${t.score}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+            if (timer) {
+                container.appendChild(timer);
+            }
+        }
+        window.renderTeams = renderTeams;
+
         window.renderLobbyTeams = function() {
             const list = document.getElementById('lobby-teams-list');
             const countLabel = document.getElementById('lobby-team-count');
@@ -2237,63 +2416,26 @@ var Editor = {
             
             let html = '';
             window.teamsData.forEach(t => {
-                const colorMap = {
-                    blue: { bg: 'bg-blue-500 text-white', border: 'border-blue-600' },
-                    red: { bg: 'bg-red-500 text-white', border: 'border-red-600' },
-                    green: { bg: 'bg-green-500 text-white', border: 'border-green-600' },
-                    yellow: { bg: 'bg-yellow-400 text-yellow-900', border: 'border-yellow-500' },
-                    purple: { bg: 'bg-purple-500 text-white', border: 'border-purple-600' },
-                    pink: { bg: 'bg-pink-500 text-white', border: 'border-pink-600' }
-                };
-                const c = colorMap[t.color] || colorMap.blue;
-                
+                const colors = { blue: 'bg-blue-500', red: 'bg-red-500', green: 'bg-green-500', yellow: 'bg-yellow-500', purple: 'bg-purple-500', pink: 'bg-pink-500' };
+                const bg = colors[t.color] || 'bg-blue-500';
                 html += `
-                    <div class="inline-flex items-stretch rounded-xl font-bold border-b-4 transition-transform hover:-translate-y-1 active:translate-y-0 active:border-b-0 shadow-sm overflow-hidden ${c.bg} ${c.border}">
-                        <button onclick="window.renameTeam(${t.id});" class="px-4 py-2 hover:bg-white/20 flex-1 text-left whitespace-nowrap overflow-hidden text-ellipsis">
-                            ${t.name} ✏️
-                        </button>
-                        ${window.teamsData.length > 1 ? `<button onclick="window.removeTeam(${t.id});" class="px-3 py-2 border-l border-white/30 hover:bg-red-500/80 flex items-center justify-center transition-colors">✖</button>` : ''}
+                    <div class="bg-white p-3 rounded-xl border-2 flex justify-between items-center group shadow-sm transition-all hover:border-${t.color}-300">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full ${bg} flex items-center justify-center text-white font-bold shadow-inner">
+                                ${t.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span class="font-bold text-gray-700 text-lg">${t.name}</span>
+                        </div>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="renameTeam(${t.id})" class="p-2 hover:bg-gray-100 rounded-lg" title="Rename"><span class="text-xl">✏️</span></button>
+                            <button onclick="removeTeam(${t.id})" class="p-2 hover:bg-red-100 text-red-500 rounded-lg" title="Remove"><span class="text-xl">🗑️</span></button>
+                        </div>
                     </div>
                 `;
             });
             list.innerHTML = html;
         };
 
-        function renderTeams() {
-            const container = document.getElementById('teams-container');
-            if (!container) return;
-            
-            let html = '';
-            window.teamsData.forEach(t => {
-                const colorMap = {
-                    blue: { bg: 'bg-blue-500/90 hover:bg-blue-400', border: 'border-blue-300' },
-                    red: { bg: 'bg-red-500/90 hover:bg-red-400', border: 'border-red-300' },
-                    green: { bg: 'bg-green-500/90 hover:bg-green-400', border: 'border-green-300' },
-                    yellow: { bg: 'bg-yellow-500/90 hover:bg-yellow-400', border: 'border-yellow-300' },
-                    purple: { bg: 'bg-purple-500/90 hover:bg-purple-400', border: 'border-purple-300' },
-                    pink: { bg: 'bg-pink-500/90 hover:bg-pink-400', border: 'border-pink-300' }
-                };
-                const c = colorMap[t.color];
-                
-                html += `
-                    <div class="flex items-center gap-1 group">
-                        <button 
-                            onclick="updateTeamScore(${t.id}, 1)" 
-                            oncontextmenu="event.preventDefault(); updateTeamScore(${t.id}, -1)" 
-                            class="team-score glass ${c.bg} text-white px-4 py-2 rounded-full font-black text-xl shadow-lg ${c.border} cursor-pointer transform hover:scale-105 transition-transform flex items-center gap-2">
-                            <span>${t.name}</span>: <span id="score-team${t.id}">${t.score}</span>
-                        </button>
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-            
-            // Also update lobby teams if visible
-            if (typeof window.renderLobbyTeams === 'function') {
-                window.renderLobbyTeams();
-            }
-        }
-        
         // Wait for DOM
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(renderTeams, 500);

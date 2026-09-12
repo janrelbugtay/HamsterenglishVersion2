@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, doc, addDoc, updateDoc } from "fireb
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 
-type GameScreen = 'editor' | 'setup' | 'loading' | 'game';
+type GameScreen = 'editor' | 'setup' | 'loading' | 'game' | 'study';
 
 interface Sentence {
   id: number | string;
@@ -29,6 +29,8 @@ interface GameData {
 export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
   const { user } = useAuth();
   const [screen, setScreen] = useState<GameScreen>(initialGame && !initialGame.editMode ? 'setup' : 'editor');
+  const [selectedTheme, setSelectedTheme] = useState('theme-sky');
+  const [studyIndex, setStudyIndex] = useState(0);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
   const [activeGame, setActiveGame] = useState<GameData>(() => {
     if (initialGame) {
@@ -64,7 +66,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
         if (iframeRef.current?.contentWindow) {
             iframeRef.current.contentWindow.postMessage({
                 type: 'LOAD_GAME',
-                data: activeGame
+                data: { ...activeGame, theme: selectedTheme }
             }, '*');
         }
       }
@@ -159,7 +161,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
       )}
 
       {screen === 'setup' && (
-        <div className="absolute inset-0 z-40 bg-gradient-to-b from-sky-400 to-blue-200 dark:from-sky-900 dark:to-blue-950 flex flex-col items-center justify-center p-8 overflow-hidden">
+        <div className={`absolute inset-0 z-40 flex flex-col items-center justify-center p-8 overflow-hidden transition-colors duration-1000 ${selectedTheme === "theme-ocean" ? "bg-gradient-to-b from-sky-600 to-cyan-600 dark:from-sky-800 dark:to-cyan-900" : selectedTheme === "theme-space" ? "bg-gradient-to-b from-slate-900 to-indigo-950" : selectedTheme === "theme-jungle" ? "bg-gradient-to-b from-green-600 to-emerald-400 dark:from-green-900 dark:to-emerald-800" : selectedTheme === "theme-sunset" ? "bg-gradient-to-b from-orange-400 to-yellow-300 dark:from-orange-800 dark:to-yellow-700" : "bg-gradient-to-b from-sky-400 to-blue-200 dark:from-sky-900 dark:to-blue-950"}`}>
             {/* Immersive Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
                 <div className="absolute top-10 left-10 w-32 h-32 bg-white/20 rounded-full blur-3xl"></div>
@@ -198,8 +200,8 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                     Bubble Island
                 </h2>
                 
-                <div className="flex gap-8 max-w-2xl w-full justify-center perspective-[1000px]">
-                    <button onClick={startGame} className="group relative w-full sm:w-80 h-80 rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
+                <div className="flex flex-wrap gap-8 max-w-6xl w-full justify-center items-center flex-col sm:flex-row perspective-[1000px]">
+                    <button onClick={startGame} className="group relative w-full sm:w-80 h-[380px] rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-400/30 rounded-full blur-2xl group-hover:bg-blue-400/50 transition-colors"></div>
                         
@@ -209,6 +211,38 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                         <h3 className="relative z-10 text-3xl font-black text-white mb-2 drop-shadow-md">Play Game</h3>
                         <p className="relative z-10 text-blue-50 font-medium text-center">Start popping bubbles!</p>
                     </button>
+
+                    <div className="w-full sm:w-80 h-[380px] rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl p-6 flex flex-col justify-center">
+                        <h3 className="text-2xl font-black text-white mb-4 text-center drop-shadow-md">Choose Theme</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { id: 'theme-sky', name: 'Sky', icon: '☁️' },
+                                { id: 'theme-ocean', name: 'Ocean', icon: '🌊' },
+                                { id: 'theme-space', name: 'Space', icon: '🚀' },
+                                { id: 'theme-jungle', name: 'Jungle', icon: '🌴' },
+                                { id: 'theme-sunset', name: 'Sunset', icon: '🌅' }
+                            ].map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => setSelectedTheme(t.id)}
+                                    className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all shadow-sm font-bold text-sm ${selectedTheme === t.id ? 'bg-white text-blue-600 border-2 border-blue-400 scale-105' : 'bg-white/20 text-white border-2 border-transparent hover:bg-white/30'}`}
+                                >
+                                    <span className="text-2xl">{t.icon}</span>
+                                    {t.name}
+                                </button>
+                            ))}
+                        </div><button onClick={() => setScreen('study')} className="group relative w-full sm:w-80 h-[380px] rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
+                        <div className="absolute -top-20 -right-20 w-40 h-40 bg-purple-400/30 rounded-full blur-2xl group-hover:bg-purple-400/50 transition-colors"></div>
+                        
+                        <div className="relative z-10 text-8xl mb-6 transform group-hover:scale-110 transition-transform duration-500 drop-shadow-xl" style={{ animation: 'bounce-idle 3.5s infinite ease-in-out' }}>
+                            📖
+                        </div>
+                        <h3 className="relative z-10 text-3xl font-black text-white mb-2 drop-shadow-md">Study Mode</h3>
+                        <p className="relative z-10 text-purple-50 font-medium text-center">Review words flashcards!</p>
+                    </button>
+
+                </div>
                 </div>
                 
                 <div className="flex flex-wrap justify-center gap-4 mt-12 relative z-10">
@@ -217,6 +251,62 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                   </button>
 
                 </div>
+            </div>
+        </div>
+      )}
+
+      
+      {screen === 'study' && (
+        <div 
+            className="absolute inset-0 z-50 flex flex-col bg-white overflow-hidden cursor-pointer select-none" 
+            id="study-container"
+            onClick={(e) => {
+                // Don't advance if clicking on buttons
+                if ((e.target as HTMLElement).closest('button')) return;
+                setStudyIndex(Math.min(activeGame.sentences.length - 1, studyIndex + 1));
+            }}
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+                    setStudyIndex(Math.min(activeGame.sentences.length - 1, studyIndex + 1));
+                } else if (e.key === 'ArrowLeft') {
+                    setStudyIndex(Math.max(0, studyIndex - 1));
+                }
+            }}
+            ref={el => {
+                // Auto-focus container to capture keyboard events
+                if (el) el.focus();
+            }}
+        >
+            <div className="absolute top-4 left-4 z-20">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setScreen('setup'); }}
+                    className="flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 rounded-full shadow-sm text-slate-600 font-bold transition-colors cursor-pointer"
+                >
+                    <ArrowLeft size={24} /> Back
+                </button>
+            </div>
+            <div className="absolute top-4 right-4 z-20 text-slate-600 [&>button]:bg-slate-100 [&>button]:hover:bg-slate-200">
+                <FullscreenButton targetId="study-container" />
+            </div>
+
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 text-slate-400 font-bold text-xl bg-slate-100 px-6 py-2 rounded-full z-10 pointer-events-none">
+                {studyIndex + 1} / {activeGame.sentences.length}
+            </div>
+
+            <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-12 relative w-full h-full">
+                {activeGame.sentences.length > 0 ? (
+                    <h1 className="text-[12vw] sm:text-[10vw] font-black text-slate-800 tracking-tight leading-[1.1] text-center max-w-full break-words drop-shadow-sm pointer-events-none w-full px-8">
+                        {activeGame.sentences[studyIndex]?.text}
+                    </h1>
+                ) : (
+                    <div className="text-slate-500 text-3xl font-bold pointer-events-none">No words/sentences to study!</div>
+                )}
+            </div>
+            
+            {/* Visual hint for interaction */}
+            <div className="absolute bottom-6 left-0 right-0 flex justify-center pointer-events-none opacity-40">
+                <p className="text-slate-400 font-medium tracking-wide">Click anywhere or use ← → arrows to navigate</p>
             </div>
         </div>
       )}
@@ -234,7 +324,7 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                 onLoad={() => { if (iframeRef.current?.contentWindow) {
                       iframeRef.current.contentWindow.postMessage({
                           type: 'LOAD_GAME',
-                          data: activeGame
+                          data: { ...activeGame, theme: selectedTheme }
                       }, '*');
                   }
                 }}

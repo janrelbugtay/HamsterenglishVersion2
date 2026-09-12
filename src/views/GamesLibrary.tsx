@@ -41,6 +41,7 @@ export const GamesLibrary = ({
     { id: "hamster-pop-quiz", title: "Hamster Pop Quiz", icon: "https://images.unsplash.com/photo-1548767797-d8c844163c4c?q=80&w=1000&auto=format&fit=crop", color: "bg-yellow-100 text-yellow-600" },
     { id: "student-race", title: "Name Picker", icon: "https://images.unsplash.com/photo-1541604193435-22287d32c2c2?q=80&w=1000&auto=format&fit=crop", color: "bg-indigo-100 text-indigo-600" },
     { id: "tic-tac-toe", title: "Tic Tac Toe Battle", icon: "https://images.unsplash.com/photo-1668901382969-8c73e450a1f5?q=80&w=1000&auto=format&fit=crop", color: "bg-gray-100 text-gray-800" },
+    { id: "phonemic-master", title: "Phonemic Master", icon: "https://images.unsplash.com/photo-1544640808-32cb4f0f7f32?q=80&w=1000&auto=format&fit=crop", color: "bg-emerald-100 text-emerald-600" },
   ];
 
   const gameTemplates = allGameTemplates.filter(g => isAdmin || publishedGames[g.id] !== false);

@@ -1,1 +1,0 @@
-sed -i 's/import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from .firebase\/firestore.;/import { collection, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase\/firestore";/' src/views/AdminDashboard.tsx

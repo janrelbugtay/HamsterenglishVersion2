@@ -242,6 +242,20 @@ function FeaturedGamesSection({
       isAI: false,
       color: "from-gray-700 to-gray-900",
       icon: "❌",
+    },
+    {
+      id: "phonemic-master",
+      title: "Phonemic Master",
+      description: "Listen, speak, and master the 44 sounds of English.",
+      difficulty: "Hard",
+      players: "1 Player",
+      time: "10m",
+      subject: "ESL",
+      grade: "All",
+      imageUrl: "https://images.unsplash.com/photo-1544640808-32cb4f0f7f32?q=80&w=1000&auto=format&fit=crop",
+      isAI: false,
+      color: "from-emerald-700 to-emerald-900",
+      icon: "🗣️",
     }
   ];
 
