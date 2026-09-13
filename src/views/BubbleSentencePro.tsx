@@ -231,7 +231,10 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                                     {t.name}
                                 </button>
                             ))}
-                        </div><button onClick={() => setScreen('study')} className="group relative w-full sm:w-80 h-[380px] rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
+                        </div>
+                    </div>
+                    
+                    <button onClick={() => setScreen('study')} className="group relative w-full sm:w-80 h-[380px] rounded-[3rem] bg-white/20 dark:bg-slate-900/40 backdrop-blur-md border border-white/40 shadow-2xl overflow-hidden transition-all duration-500 hover:scale-105 hover:bg-white/30 hover:-translate-y-2 cursor-pointer flex flex-col items-center justify-center p-8">
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/5 dark:to-black/20 pointer-events-none"></div>
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-purple-400/30 rounded-full blur-2xl group-hover:bg-purple-400/50 transition-colors"></div>
                         
@@ -251,7 +254,6 @@ export function BubbleSentencePro({ onViewChange, initialGame }: { onViewChange:
                   </button>
 
                 </div>
-            </div>
         </div>
       )}
 

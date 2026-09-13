@@ -694,6 +694,16 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     
+    const ansMatch = line.match(/^answer\s*[:=]?\s*([a-eA-E1-4])/i);
+    if (ansMatch) {
+       if (currentQ) {
+          const val = ansMatch[1].toUpperCase();
+          if (/[A-E]/.test(val)) currentQ.answerIndex = val.charCodeAt(0) - 65;
+          else if (/[1-4]/.test(val)) currentQ.answerIndex = parseInt(val) - 1;
+       }
+       continue;
+    }
+
     let inlineAnswerMatch = line.match(/\banswer\s*[:=]?\s*([a-eA-E1-4])\b/i);
     let inlineAnswerIndex = -1;
     if (inlineAnswerMatch) {
@@ -703,15 +713,7 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
        line = line.replace(inlineAnswerMatch[0], '').trim();
     }
     
-    const ansMatch = line.match(/^answer\s*[:=]?\s*([a-eA-E1-4])/i);
-    if (ansMatch || line === '') {
-       if (currentQ && (ansMatch || inlineAnswerIndex !== -1)) {
-          const val = ansMatch ? ansMatch[1].toUpperCase() : inlineAnswerMatch![1].toUpperCase();
-          if (/[A-E]/.test(val)) currentQ.answerIndex = val.charCodeAt(0) - 65;
-          else if (/[1-4]/.test(val)) currentQ.answerIndex = parseInt(val) - 1;
-       }
-       continue;
-    }
+    if (line === '') continue;
     
     const optMatch = line.match(optionRegex);
     if (optMatch) {

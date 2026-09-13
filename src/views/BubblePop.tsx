@@ -1110,6 +1110,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-3xl">
                             {activeQuiz.questions[studyIndex]?.options.map((opt, i) => {
+                                if (!opt || opt.trim() === '') return null;
                                 const isSelected = studySelectedOption === i;
                                 const isCorrect = i === activeQuiz.questions[studyIndex].answerIndex;
                                 const showAsCorrect = studySelectedOption !== null && isCorrect;
@@ -1669,7 +1670,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
     const newItems: Question[] = parsed.map((item, i) => ({
       id: Date.now() + i + Math.random(),
       text: item.text || "",
-      options: item.options || ["", "", "", ""],
+      options: item.options || ["", ""],
       answerIndex: item.answerIndex || 0,
     }));
 
@@ -1707,7 +1708,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
       const newItems: Question[] = parsedItems.map((item, i) => ({
         id: Date.now() + i + Math.random(),
         text: item.text || "",
-        options: item.options || ["", "", "", ""],
+        options: item.options || ["", ""],
         answerIndex: item.answerIndex || 0,
       }));
 
@@ -1736,7 +1737,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
 
 
   const addQuestion = () => {
-    setQuestions([...questions, { id: Date.now(), text: '', options: ['', '', '', ''], answerIndex: 0 }]);
+    setQuestions([...questions, { id: Date.now(), text: '', options: ['', ''], answerIndex: 0 }]);
   };
 
   const updateQuestion = (id: number | string, field: keyof Question, value: any) => {
@@ -2141,7 +2142,16 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
         });
       }
     });
-    if (items.length > 0) return items;
+    if (items.length > 0) {
+      items.forEach(q => {
+         if (q.options) {
+            while (q.options.length > 2 && q.options[q.options.length - 1] === "") {
+                q.options.pop();
+            }
+         }
+      });
+      return items;
+    }
   }
   
   const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -2151,6 +2161,16 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
     
+    const ansMatch = line.match(/^answer\s*[:=]?\s*([a-eA-E1-4])/i);
+    if (ansMatch) {
+       if (currentQ) {
+          const val = ansMatch[1].toUpperCase();
+          if (/[A-E]/.test(val)) currentQ.answerIndex = val.charCodeAt(0) - 65;
+          else if (/[1-4]/.test(val)) currentQ.answerIndex = parseInt(val) - 1;
+       }
+       continue;
+    }
+
     let inlineAnswerMatch = line.match(/\banswer\s*[:=]?\s*([a-eA-E1-4])\b/i);
     let inlineAnswerIndex = -1;
     if (inlineAnswerMatch) {
@@ -2160,15 +2180,7 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
        line = line.replace(inlineAnswerMatch[0], '').trim();
     }
     
-    const ansMatch = line.match(/^answer\s*[:=]?\s*([a-eA-E1-4])/i);
-    if (ansMatch || line === '') {
-       if (currentQ && (ansMatch || inlineAnswerIndex !== -1)) {
-          const val = ansMatch ? ansMatch[1].toUpperCase() : inlineAnswerMatch![1].toUpperCase();
-          if (/[A-E]/.test(val)) currentQ.answerIndex = val.charCodeAt(0) - 65;
-          else if (/[1-4]/.test(val)) currentQ.answerIndex = parseInt(val) - 1;
-       }
-       continue;
-    }
+    if (line === '') continue;
     
     const optMatch = line.match(optionRegex);
     if (optMatch) {
@@ -2213,6 +2225,16 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
   }
 
   const allEmptyOptions = items.every(q => q.options!.every(o => o === ""));
+  
+  // Clean up trailing empty options, keeping minimum 2 options
+  items.forEach(q => {
+     if (q.options) {
+        while (q.options.length > 2 && q.options[q.options.length - 1] === "") {
+            q.options.pop();
+        }
+     }
+  });
+
   if (allEmptyOptions && items.length > 0) {
      return items; 
   }
