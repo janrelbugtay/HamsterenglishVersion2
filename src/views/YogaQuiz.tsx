@@ -766,7 +766,7 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
 }
 
 
-const fallbackEmojis = ['🧘‍♀️', '🙆‍♀️', '🧎‍♀️', '🧍‍♀️', '🚶‍♀️', '🏃‍♀️', '🤸‍♀️', '🤸‍♂️', '🧘‍♂️', '🙆‍♂️', '🧎‍♂️', '🧍‍♂️'];
+const fallbackEmojis = ['🧘‍♀️', '🙆‍♀️', '🧎‍♀️', '🧍‍♀️', '🚶‍♀️', '🏃‍♀️', '🤸‍♀️', '🤸‍♂️', '🧘‍♂️', '🙆‍♂️', '🧎‍♂️', '🧍‍♂️', '💆‍♀️', '💆‍♂️', '🧜‍♀️', '🧜‍♂️', '🏄‍♀️', '🏄‍♂️', '🏊‍♀️', '🏊‍♂️', '🧗‍♀️', '🧗‍♂️'];
 const AVAILABLE_POSES = [
     ...fallbackEmojis.map(e => ({ type: 'emoji', value: e }))
 ];
@@ -886,9 +886,14 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
             .filter(opt => opt.text.trim() !== "");
         
         // Shuffle the rendering order so the correct answer isn't always in the same visual position
-        // The pose emoji will stay attached to its original index
         opts.sort(() => Math.random() - 0.5);
-        setShuffledOptions(opts);
+        
+        // Randomly assign a unique pose index from the currently active poses to each option
+        // To ensure we don't get duplicates (unless there are more options than poses), we shuffle an array of available indices
+        let availablePoseIndices = Array.from({ length: Math.max(opts.length, activePoses.length) }, (_, i) => i % activePoses.length);
+        availablePoseIndices.sort(() => Math.random() - 0.5);
+        
+        setShuffledOptions(opts.map((opt, idx) => ({...opt, poseIndex: availablePoseIndices[idx]})));
     };
 
     const handleAnswer = (index: number, isCorrect: boolean) => {
@@ -924,6 +929,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                     loadQuestion(nextIdx);
                 } else {
                     setGameState('end');
+                    playSound('win');
                 }
             }
         }, 1000);
@@ -939,6 +945,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
             loadQuestion(nextIdx);
         } else {
             setGameState('end');
+                    playSound('win');
         }
     };
 
@@ -1198,12 +1205,9 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                                       >
                                           <div className={`w-full aspect-square max-h-[25vh] ${isMany ? 'md:max-h-[20vh]' : ''} rounded-xl md:rounded-[1.5rem] overflow-hidden relative bg-teal-50/50 border-4 border-teal-100 mb-2 md:mb-4 shadow-inner transition-transform duration-300 shrink-0 flex items-center justify-center ${!isAnswering ? 'group-hover:scale-[1.05]' : ''}`}>
                                               {(() => {
-                                                  const safePoses = [...activePoses];
-                                                  for (const p of AVAILABLE_POSES) {
-                                                      if (safePoses.length >= 10) break;
-                                                      if (!safePoses.includes(p.value)) safePoses.push(p.value);
-                                                  }
-                                                  const activePoseValue = safePoses[index] || AVAILABLE_POSES[0].value;
+                                                  // We use the pre-assigned random poseIndex for this option (so it doesn't change on render)
+                                                  // And if we have more options than active poses, we loop back through the active poses
+                                                  const activePoseValue = activePoses[opt.poseIndex % activePoses.length] || AVAILABLE_POSES[0].value;
                                                   const poseObj = AVAILABLE_POSES.find(p => p.value === activePoseValue) || { type: 'emoji', value: activePoseValue };
                                                   
                                                   if (poseObj.type === 'image') {
@@ -1230,8 +1234,17 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
               {gameState === 'end' && (
                   <div className="p-8 md:p-16 xl:p-24 text-center flex flex-col items-center justify-center flex-grow animate-fade-in">
                       <div className="text-[6rem] md:text-[10rem] mb-10 drop-shadow-2xl animate-bounce">🏆</div>
-                      <h1 className="text-6xl md:text-8xl xl:text-9xl font-black text-teal-800 mb-6 drop-shadow-sm">Namaste!</h1>
-                      <p className="text-2xl md:text-4xl text-teal-600/80 mb-12 font-bold">You finished the quiz.</p>
+                      {(() => {
+                          const sortedTeams = [...teams].sort((a,b) => b.score - a.score);
+                          const winner = sortedTeams[0];
+                          const isTie = sortedTeams.length > 1 && sortedTeams[0].score === sortedTeams[1].score && sortedTeams[0].score > 0;
+                          
+                          if (isTie) {
+                              return <h1 className="text-5xl md:text-7xl xl:text-8xl font-black text-teal-800 mb-12 drop-shadow-sm text-center">It's a Tie!</h1>;
+                          } else {
+                              return <h1 className="text-5xl md:text-7xl xl:text-[6rem] font-black text-teal-800 mb-12 drop-shadow-sm leading-tight text-center break-words max-w-[90vw]">{winner.name} Wins!</h1>;
+                          }
+                      })()}
                       
                       <div className="bg-indigo-50 border-8 border-indigo-100 rounded-[3rem] p-8 md:p-12 mb-12 w-full max-w-4xl shadow-inner mx-auto relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-100/50 rounded-bl-full pointer-events-none"></div>
