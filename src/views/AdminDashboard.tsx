@@ -113,9 +113,9 @@ const APP_GAMES = [
 
 const DashboardOverview = ({ users, onSync, isSyncing, onViewAll, publishedGames, onToggleGamePublish, pageVisits }: any) => {
   const [showGuestModal, setShowGuestModal] = React.useState(false);
-  const registeredUsersList = users.filter((u: any) => u.isAnonymous !== true && u.email !== "User");
+  const registeredUsersList = users.filter((u: any) => u.isAnonymous !== true && u.email && u.email !== "User");
   const registeredUsers = registeredUsersList.length;
-  const guestUsersList = users.filter((u: any) => u.isAnonymous === true || u.email === "User");
+  const guestUsersList = users.filter((u: any) => u.isAnonymous === true || !u.email || u.email === "User");
   const guestUsers = guestUsersList.length;
 
   return (

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Play, ChevronRight, RefreshCw, ArrowLeft, Save, Edit3, Trash2, Sun, Moon, Maximize, Minimize } from 'lucide-react';
+import { User, Play, ChevronRight, RefreshCw, ArrowLeft, Save, Edit3, Trash2, Sun, Moon, Maximize, Minimize, ClipboardList, Info, Check } from 'lucide-react';
 import { ViewState } from "../types";
+import { useAuth } from '../contexts/AuthContext';
+import { db } from '../lib/firebase';
+import { collection, addDoc, updateDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { Plus, Folder } from 'lucide-react';
 
 const GAME_DATA = [
   {
@@ -147,16 +151,9 @@ const AnswerBoard = ({ answers, revealedIndices, isDark }: { answers: any[], rev
   const slots = Array.from({ length: 8 }).map((_, i) => answers[i] || null);
 
   return (
-    <div className={`relative border-[12px] border-[#d4af37] rounded-[2rem] p-4 md:p-8 bg-gradient-to-b ${isDark ? 'from-[#0a1526] to-[#04080f]' : 'from-blue-100 to-white'} shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_80px_rgba(212,175,55,0.3),inset_0_0_40px_rgba(0,0,0,0.9)] w-full max-w-5xl`}>
-      <div className="absolute inset-0 border-[4px] border-[#ffd700]/30 rounded-[1.4rem] pointer-events-none"></div>
-
-      {/* Decorative side lights */}
-      <div className="absolute -left-14 top-1/2 -translate-y-1/2 flex-col gap-6 hidden lg:flex">
-        {[1,2,3,4].map(i => <div key={i} className="w-4 h-16 bg-gradient-to-b from-yellow-300 to-yellow-600 rounded-full shadow-[0_0_15px_rgba(253,224,71,0.8),inset_0_2px_4px_rgba(255,255,255,0.5)]"></div>)}
-      </div>
-      <div className="absolute -right-14 top-1/2 -translate-y-1/2 flex-col gap-6 hidden lg:flex">
-        {[1,2,3,4].map(i => <div key={i} className="w-4 h-16 bg-gradient-to-b from-yellow-300 to-yellow-600 rounded-full shadow-[0_0_15px_rgba(253,224,71,0.8),inset_0_2px_4px_rgba(255,255,255,0.5)]"></div>)}
-      </div>
+    <div className={`relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t-4 border-indigo-500 rounded-[2rem] p-4 md:p-8 shadow-2xl w-full max-w-5xl overflow-hidden`}>
+      {/* Clean modern overlay replacing the heavy gold styling */}
+      <div className="absolute inset-0 pointer-events-none rounded-[2rem] border border-slate-200 dark:border-white/10"></div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 relative z-10">
         {slots.map((answer, index) => {
@@ -166,7 +163,7 @@ const AnswerBoard = ({ answers, revealedIndices, isDark }: { answers: any[], rev
           return (
             <div 
               key={index} 
-              className={`h-20 md:h-[6.5rem] relative overflow-hidden rounded-xl border-[3px] ${isDark ? 'border-[#1e293b] bg-[#020617]' : 'border-blue-200 bg-blue-50'} shadow-[0_10px_20px_rgba(0,0,0,0.6)]`}
+              className={`h-20 md:h-[6.5rem] relative overflow-hidden rounded-xl border-2 ${isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-slate-50'} shadow-md`}
             >
               {/* Revealed State Background */}
               <div className="absolute inset-0 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 flex justify-between items-center px-4 md:px-6"
@@ -192,9 +189,8 @@ const AnswerBoard = ({ answers, revealedIndices, isDark }: { answers: any[], rev
                 <div className="absolute top-0 left-0 w-full h-[45%] bg-gradient-to-b from-white/30 to-transparent pointer-events-none"></div>
                 
                 {hasAnswer ? (
-                  <div className="w-16 h-12 md:w-24 md:h-16 rounded-full bg-[#0a1930] border-[4px] border-blue-300 flex items-center justify-center shadow-[inset_0_4px_10px_rgba(0,0,0,0.8),0_4px_15px_rgba(0,0,0,0.6)] relative overflow-hidden">
-                     <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent pointer-events-none"></div>
-                    <span className="text-white font-black text-3xl md:text-4xl drop-shadow-[0_3px_3px_rgba(0,0,0,1)] relative z-10" style={{ fontFamily: 'Impact, sans-serif' }}>
+                  <div className="w-16 h-12 md:w-24 md:h-16 rounded-full bg-indigo-600 border-4 border-indigo-300 flex items-center justify-center shadow-inner relative overflow-hidden">
+                    <span className="text-white font-black text-3xl md:text-4xl drop-shadow-md relative z-10" style={{ fontFamily: 'Impact, sans-serif' }}>
                       {index + 1}
                     </span>
                   </div>
@@ -211,7 +207,133 @@ const AnswerBoard = ({ answers, revealedIndices, isDark }: { answers: any[], rev
 };
 
 export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view: ViewState) => void, initialGame?: any }) {
-  const [gameState, setGameState] = useState('start');
+  const { user } = useAuth();
+  const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
+  
+  useEffect(() => {
+    if (user) {
+      const fetchFolders = async () => {
+        const qFolders = query(collection(db, "gameFolders"), where("userId", "==", user.uid));
+        const foldersSnap = await getDocs(qFolders);
+        const f: any[] = [];
+        foldersSnap.forEach(doc => f.push({ id: doc.id, ...doc.data() }));
+        setFolders(f);
+      };
+      fetchFolders();
+    }
+  }, [user]);
+
+  const [gameState, setGameState] = useState(initialGame && !initialGame.editMode ? 'playing' : 'setup');
+  
+  const [folderId, setFolderId] = useState(initialGame?.folderId || "");
+  const [topic, setTopic] = useState(initialGame?.topic || "");
+  const [classLevel, setClassLevel] = useState(initialGame?.className || "");
+  
+  // Custom rounds
+  const defaultRound = {
+    question: '',
+    answers: Array.from({ length: 8 }, () => ({ text: '', points: 0 }))
+  };
+  
+  const [rounds, setRounds] = useState<any[]>(
+    initialGame?.customQuestions && initialGame.customQuestions.length > 0 
+      ? initialGame.customQuestions 
+      : [JSON.parse(JSON.stringify(defaultRound))]
+  );
+  
+  const [customGameData, setCustomGameData] = useState<any>(initialGame?.customQuestions || null);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  
+  // Bulk Paste State
+  const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [toastMsg, setToastMsg] = useState("");
+  
+  const parseFamilyFeudText = (rawText: string) => {
+    if (!rawText.trim()) return [];
+    
+    const allLines = rawText.split(/\r?\n/).map((l: string) => l.trim());
+    const parsedRounds: any[] = [];
+    let currentRound: any = null;
+    
+    for (let i = 0; i < allLines.length; i++) {
+      const line = allLines[i];
+      if (!line) continue;
+      
+      const isExplicitTopic = /^(topic|question)/i.test(line);
+      const match = line.match(/(.*?)(?:\s*[-:]?\s*\(?(\d+)\)?)?\s*$/);
+      const hasPoints = match && match[2] !== undefined && match[2] !== "";
+      
+      if (isExplicitTopic || (!hasPoints && (!currentRound || currentRound.answers.length >= 8))) {
+        if (currentRound) {
+           parsedRounds.push(currentRound);
+        }
+        currentRound = {
+          question: line.replace(/^(topic|question)\s*\d*[:.-]?\s*/i, ''),
+          answers: []
+        };
+      } else {
+        if (!currentRound) {
+          currentRound = { question: '', answers: [] };
+        }
+        if (currentRound.answers.length < 8) {
+           let points = 10;
+           let text = line;
+           if (line.includes('\t')) {
+              const parts = line.split('\t');
+              const lastPart = parseInt(parts[parts.length - 1], 10);
+              if (!isNaN(lastPart)) {
+                points = lastPart;
+                text = parts.slice(0, -1).join(' ').trim();
+              }
+           } else if (hasPoints) {
+              text = match[1].trim();
+              points = parseInt(match[2], 10);
+           }
+           text = text.replace(/[-:]$/, '').trim();
+           text = text.replace(/^([a-eA-E1-8])[\.\)\:\-]\s+/, '');
+           if (text) {
+             currentRound.answers.push({ text, points });
+           }
+        }
+      }
+    }
+    
+    if (currentRound) {
+      parsedRounds.push(currentRound);
+    }
+    
+    parsedRounds.forEach(r => {
+      while (r.answers.length < 8) {
+        r.answers.push({ text: '', points: 0 });
+      }
+    });
+    
+    return parsedRounds;
+  };
+
+  const handleApplyBulkPaste = (action: 'replace' | 'append') => {
+    const parsed = parseFamilyFeudText(bulkText);
+    if (parsed.length === 0) {
+      alert("Could not find any topics/answers. Please format correctly.");
+      return;
+    }
+    if (action === 'replace') {
+      setRounds(parsed);
+    } else {
+      setRounds(prev => {
+        // Overwrite the first round if it has no answers, even if it has a topic
+        if (prev.length === 1 && prev[0].answers.every((a: any) => !a.text.trim())) {
+          return parsed;
+        }
+        return [...prev, ...parsed];
+      });
+    }
+    setToastMsg(`✨ Added ${parsed.length} topics!`);
+    setTimeout(() => setToastMsg(""), 3500);
+    setShowBulkPasteModal(false);
+    setBulkText("");
+  };
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const isDark = theme === 'dark';
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -224,7 +346,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
   const inputRef = useRef<HTMLInputElement>(null);
   const gameContainerRef = useRef<HTMLDivElement>(null);
 
-  const gameData = initialGame?.customQuestions || GAME_DATA;
+  const gameData = customGameData || initialGame?.customQuestions || GAME_DATA;
   const currentQ = gameData[currentQuestionIndex];
 
   useEffect(() => {
@@ -259,7 +381,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
   };
 
   const revealAnswer = (index: number) => {
-    if (!currentQ || gameState === 'start' || gameState === 'game_over') return;
+    if (!currentQ || gameState === 'setup' || gameState === 'game_over') return;
     if (!revealedAnswers.includes(index) && currentQ.answers[index]) {
       const newRevealed = [...revealedAnswers, index];
       setRevealedAnswers(newRevealed);
@@ -308,26 +430,322 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
     setInputValue('');
   };
 
-  const renderStartScreen = () => (
-    <div className="flex flex-col items-center justify-center h-full space-y-12 animate-in fade-in zoom-in mt-16">
-      <div className="relative">
-        <div className={`text-7xl md:text-[10rem] font-black ${isDark ? 'text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-yellow-400 to-amber-600' : 'text-transparent bg-clip-text bg-gradient-to-b from-yellow-500 via-amber-600 to-amber-800'} drop-shadow-[0_15px_30px_rgba(0,0,0,0.8)] text-center leading-[0.85] tracking-tighter`} style={{ fontFamily: 'Impact, sans-serif' }}>
-          FAMILY
-          <br/>
-          FEUD
+    const handleStartCustomGame = () => {
+    const validRounds = rounds.map(r => ({
+      ...r,
+      answers: r.answers
+        .filter((a: any) => a.text.trim() !== '')
+        .map((a: any) => ({ text: a.text.toUpperCase(), points: Number(a.points) || 0 }))
+    })).filter(r => r.question.trim() !== '' && r.answers.length > 0);
+
+    if (validRounds.length === 0) {
+      alert("Please add at least one complete topic with answers.");
+      return;
+    }
+
+    setCustomGameData(validRounds);
+    startGame();
+  };
+
+  const updateSetupAnswer = (roundIndex: number, answerIndex: number, field: 'text' | 'points', value: string) => {
+    const newRounds = [...rounds];
+    if (field === 'points') {
+      newRounds[roundIndex].answers[answerIndex].points = parseInt(value) || 0;
+    } else {
+      newRounds[roundIndex].answers[answerIndex].text = value;
+    }
+    setRounds(newRounds);
+  };
+  
+  const updateSetupTopic = (roundIndex: number, value: string) => {
+    const newRounds = [...rounds];
+    newRounds[roundIndex].question = value;
+    setRounds(newRounds);
+  };
+  
+  const addTopic = () => {
+    setRounds([...rounds, JSON.parse(JSON.stringify(defaultRound))]);
+  };
+  
+  const deleteTopic = (index: number) => {
+    if (rounds.length > 1) {
+      setRounds(rounds.filter((_, i) => i !== index));
+    }
+  };
+
+  const confirmSave = async (isPublicGame: boolean) => {
+    if (!user) {
+      alert("You must be logged in to save games.");
+      return;
+    }
+
+    setShowPublishModal(false);
+    onViewChange("games");
+
+    try {
+      const validRounds = rounds.map(r => ({
+        ...r,
+        answers: r.answers
+          .filter((a: any) => a.text.trim() !== '')
+          .map((a: any) => ({ text: a.text.toUpperCase(), points: Number(a.points) || 0 }))
+      })).filter(r => r.question.trim() !== '' && r.answers.length > 0);
+
+      const gameToSave = JSON.parse(JSON.stringify({
+        name: rounds[0]?.question || "Family Feud Game",
+        folderId: folderId || "",
+        topic: rounds[0]?.question || "",
+        className: classLevel || "",
+        gameType: "family-feud",
+        customQuestions: validRounds,
+        userId: user.uid,
+        updatedAt: new Date().toISOString(),
+        isPublic: isPublicGame,
+      }));
+
+      if (initialGame?.id) {
+        await updateDoc(doc(db, "mysteryBoxGames", initialGame.id), gameToSave);
+      } else {
+        await addDoc(collection(db, "mysteryBoxGames"), {
+          ...gameToSave,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch (error) {
+      console.error("Error saving game:", error);
+    }
+  };
+  const renderSetupScreen = () => (
+    <>
+    <div className="absolute inset-0 z-40 bg-slate-50 dark:bg-slate-900 flex flex-col items-center overflow-y-auto w-full">
+      <div className="w-full max-w-5xl mt-12 mb-20">
+        <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 p-8 flex flex-col gap-6">
+          
+          <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-6">
+            <h2 className="text-4xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Game Setup</h2>
+            <div className="flex items-center gap-4">
+              <button onClick={() => onViewChange("games")} className="px-6 py-2.5 font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => setShowPublishModal(true)} className="flex items-center gap-2 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors shadow-md shadow-blue-500/20">
+                <Save size={20} /> Save Game
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Game Mode</label>
+              <div className="px-4 py-3 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl font-medium text-slate-700 dark:text-slate-300">
+                Family Feud
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Topic</label>
+              <input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Everyday Items" className="px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-900 dark:text-white" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Class Level</label>
+              <input type="text" value={classLevel} onChange={e => setClassLevel(e.target.value)} placeholder="e.g. KET, Starters" className="px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-900 dark:text-white" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Folder</label>
+              <select value={folderId} onChange={e => setFolderId(e.target.value)} className="px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-900 dark:text-white appearance-none">
+                <option value="">No Folder (Root)</option>
+                {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-8">
+            {/* Smart Tip Bar */}
+            <div className="bg-blue-500/10 dark:bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-blue-900 dark:text-blue-200">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold">
+                  <Info size={18} />
+                </div>
+                <p className="text-xs sm:text-sm font-medium">
+                  <span className="font-bold">Smart Paste:</span> Paste multiple topics and answers with points directly.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBulkPasteModal(true)}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer self-end sm:self-auto"
+              >
+                <ClipboardList size={14} /> Bulk Paste
+              </button>
+            </div>
+
+            {rounds.map((round, rIndex) => (
+              <div key={rIndex} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 relative group">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center gap-3 w-full">
+                    <span className="text-slate-400 font-bold text-xl">Topic {rIndex + 1}</span>
+                    <input 
+                      type="text" 
+                      value={round.question}
+                      onChange={e => updateSetupTopic(rIndex, e.target.value)}
+                      className="flex-1 px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-lg outline-none focus:border-blue-500 text-slate-900 dark:text-white placeholder-slate-400"
+                      placeholder="Enter the survey question/topic..."
+                    />
+                  </div>
+                  <button 
+                    onClick={() => deleteTopic(rIndex)}
+                    className="ml-4 p-3 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-600 rounded-xl transition-colors shrink-0 disabled:opacity-30"
+                    disabled={rounds.length === 1}
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {round.answers.map((answer: any, aIndex: number) => (
+                    <div key={aIndex} className="flex gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400/20 transition-all">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 flex items-center justify-center font-bold shrink-0">
+                        {aIndex + 1}
+                      </div>
+                      <input 
+                        type="text"
+                        value={answer.text}
+                        onChange={e => updateSetupAnswer(rIndex, aIndex, 'text', e.target.value)}
+                        className="flex-1 bg-transparent font-bold outline-none text-slate-700 dark:text-white placeholder-slate-400"
+                        placeholder="Answer"
+                      />
+                      <input 
+                        type="number"
+                        value={answer.points || ''}
+                        onChange={e => updateSetupAnswer(rIndex, aIndex, 'points', e.target.value)}
+                        className="w-16 bg-transparent font-bold outline-none text-right text-indigo-500 dark:text-indigo-400 placeholder-slate-300"
+                        placeholder="Pts"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            
+            <button
+              onClick={addTopic}
+              className="w-full py-6 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 text-slate-500 hover:text-blue-500 dark:text-slate-400 font-bold rounded-2xl transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus size={24} /> ADD TOPIC
+            </button>
+          </div>
+          
+          <button
+            onClick={handleStartCustomGame}
+            className="mt-6 px-12 py-5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-2xl rounded-2xl shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all w-full flex items-center justify-center gap-3"
+          >
+             START PLAYING NOW
+          </button>
         </div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-yellow-500/20 blur-[100px] rounded-full -z-10 pointer-events-none"></div>
-        {/* Subtle decorative stars */}
-        <div className="absolute -top-10 -left-10 text-yellow-300/50 text-4xl animate-pulse">✨</div>
-        <div className="absolute -bottom-10 -right-10 text-yellow-300/40 text-5xl animate-pulse delay-300">✨</div>
       </div>
-      <button 
-        onClick={startGame}
-        className="group relative px-12 py-6 bg-gradient-to-b from-blue-500 to-blue-800 text-white rounded-full font-black text-3xl hover:from-blue-400 hover:to-blue-700 transition-all border-[6px] border-blue-300 shadow-[0_0_40px_rgba(59,130,246,0.8),inset_0_4px_10px_rgba(255,255,255,0.4)] flex items-center gap-4 transform hover:scale-105 active:scale-95"
-      >
-        <Play fill="currentColor" size={32} className="drop-shadow-md" /> ENTER STUDIO
-      </button>
+      
+      {showPublishModal && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md p-8 shadow-2xl border-2 border-blue-500/30 flex flex-col items-center text-center">
+            <h3 className="text-2xl font-black text-slate-800 dark:text-white mb-2">Save Game</h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-8 font-medium">Would you like to publish this game to the public gallery so others can play it, or keep it private?</p>
+            <div className="flex flex-col gap-3 w-full">
+              <button 
+                onClick={() => confirmSave(true)}
+                className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-sky-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] transition-transform"
+              >
+                🌍 Publish to Public
+              </button>
+              <button 
+                onClick={() => confirmSave(false)}
+                className="w-full py-3.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                🔒 Keep Private
+              </button>
+              <button 
+                onClick={() => setShowPublishModal(false)}
+                className="w-full py-2 mt-2 text-slate-500 dark:text-slate-400 font-medium hover:text-slate-700 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-slate-800 text-white px-6 py-3 rounded-full font-bold shadow-xl shadow-slate-900/20 flex items-center gap-2 animate-in slide-in-from-bottom-5">
+          <Check size={20} className="text-green-400" />
+          {toastMsg}
+        </div>
+      )}
+
+      {/* Bulk Paste Modal */}
+      {showBulkPasteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+              <h3 className="font-bold text-xl text-slate-800 dark:text-white flex items-center gap-2">
+                <ClipboardList size={22} className="text-blue-500" />
+                Bulk Paste Topics
+              </h3>
+              <button 
+                onClick={() => setShowBulkPasteModal(false)}
+                className="text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-600 dark:hover:text-white p-2 rounded-full transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6 flex flex-col gap-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 p-4 rounded-xl text-sm font-medium border border-blue-100 dark:border-blue-800/50 flex gap-3">
+                <Info size={20} className="shrink-0 text-blue-500" />
+                <p>
+                  Paste your questions and answers here. Separate each topic with a <strong>blank line</strong>. <br/>
+                  The <strong>first line</strong> of a block is the Topic. The following lines are answers, with points at the end.<br/>
+                  <span className="opacity-75 mt-2 block font-mono text-xs">
+                    Topic 1<br/>
+                    Answer One 50<br/>
+                    Answer Two 30<br/>
+                    <br/>
+                    Topic 2<br/>
+                    Another Answer 40
+                  </span>
+                </p>
+              </div>
+
+              <textarea 
+                value={bulkText}
+                onChange={e => setBulkText(e.target.value)}
+                placeholder="Paste your text here..."
+                className="w-full h-64 p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 font-mono text-sm resize-none focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+              />
+
+              {bulkText.trim() && (
+                <div className="flex justify-center -mt-2 mb-2">
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
+                    Found <span className="font-bold text-slate-800 dark:text-white">{parseFamilyFeudText(bulkText).length}</span> topics. 
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button 
+                  onClick={() => handleApplyBulkPaste('replace')}
+                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                >
+                  Replace All
+                </button>
+                <button 
+                  onClick={() => handleApplyBulkPaste('append')}
+                  className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30"
+                >
+                  Append to End
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 
   const renderGameOver = () => {
@@ -362,14 +780,10 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
   };
 
   const renderHeaderInfo = () => {
-    if (gameState === 'start' || gameState === 'game_over') return null;
+    if (gameState === 'setup' || gameState === 'game_over') return null;
     return (
        <div className="w-full max-w-5xl mx-auto mt-6 px-4">
-        <div className={`bg-gradient-to-r ${isDark ? 'from-blue-950 via-blue-900 to-blue-950' : 'from-blue-100 via-blue-50 to-blue-100'} border-y-4 border-b-8 border-blue-500/80 rounded-2xl p-6 shadow-[0_15px_40px_rgba(0,0,0,0.9),inset_0_4px_10px_rgba(255,255,255,0.1)] text-center relative overflow-hidden`}>
-          <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
-          {/* Subtle glowing dots */}
-          <div className="absolute top-2 left-4 w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_#60a5fa] animate-pulse"></div>
-          <div className="absolute top-2 right-4 w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_#60a5fa] animate-pulse delay-150"></div>
+        <div className={`bg-slate-100 dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 text-center relative overflow-hidden`}>
           <h2 className={`text-2xl md:text-5xl font-black ${isDark ? 'text-white' : 'text-slate-900'} drop-shadow-[0_4px_6px_rgba(0,0,0,1)] leading-tight tracking-wide`} style={{ fontFamily: 'Impact, sans-serif' }}>
             {currentQ.question}
           </h2>
@@ -380,19 +794,19 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
 
   const bgColors: Record<string, Record<string, string>> = {
     dark: {
-      idle: 'from-slate-900 via-[#061022] to-black',
-      correct: 'from-green-950 via-[#0a2012] to-black',
-      wrong: 'from-red-950 via-[#250909] to-black'
+      idle: 'bg-[#0f172a]',
+      correct: 'bg-green-950',
+      wrong: 'bg-red-950'
     },
     light: {
-      idle: 'from-slate-100 via-blue-50 to-white',
-      correct: 'from-green-100 via-emerald-50 to-white',
-      wrong: 'from-red-100 via-rose-50 to-white'
+      idle: 'bg-slate-50',
+      correct: 'bg-green-100',
+      wrong: 'bg-red-100'
     }
   };
 
   return (
-    <div ref={gameContainerRef} className={`h-[calc(100vh-2rem)] w-full -m-4 md:-m-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] ${bgColors[theme][feedback]} font-sans ${isDark ? 'text-white' : 'text-slate-900'} flex flex-col relative selection:bg-blue-500/30 transition-colors duration-500 overflow-hidden`} style={{ margin: '-1rem', height: 'calc(100% + 2rem)' }}>
+    <div ref={gameContainerRef} className={`h-[calc(100vh-2rem)] w-full -m-4 md:-m-8 ${bgColors[theme][feedback]} font-sans ${isDark ? 'text-white' : 'text-slate-900'} flex flex-col relative selection:bg-blue-500/30 transition-colors duration-500 overflow-hidden`} style={{ margin: '-1rem', height: 'calc(100% + 2rem)' }}>
       <div className="absolute top-4 left-4 z-[60] flex items-center gap-3">
         <button 
           onClick={() => onViewChange("home")}
@@ -450,7 +864,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
 
 
       {/* Host Controls Sidebar */}
-      {gameState !== 'start' && (
+      {gameState !== 'setup' && (
         <div className={`absolute top-0 right-0 h-full ${isDark ? 'bg-slate-950/90' : 'bg-white/95'} backdrop-blur-md border-l ${isDark ? 'border-slate-800' : 'border-slate-200'} p-4 shadow-2xl ${isDark ? 'text-white' : 'text-slate-900'} flex flex-col gap-4 z-50 w-44 overflow-y-auto`}>
           <div className={`font-black text-center border-b border-slate-700 pb-3 ${isDark ? 'text-slate-400' : 'text-slate-500'} tracking-widest text-xs`}>HOST PANEL</div>
 
@@ -463,7 +877,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
                 <button
                   key={index}
                   onClick={() => revealAnswer(index)}
-                  disabled={!hasAnswer || isRevealed || gameState === 'start' || gameState === 'game_over'}
+                  disabled={!hasAnswer || isRevealed || gameState === 'setup' || gameState === 'game_over'}
                   className={`py-3 bg-slate-800 hover:bg-blue-600 disabled:bg-slate-900 disabled:text-slate-700 rounded ${isDark ? 'text-white' : 'text-slate-900'} font-bold transition-colors shadow-inner text-sm border border-slate-700 disabled:border-slate-800`}
                 >
                   {index + 1}
@@ -497,11 +911,11 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
       <StrikeOverlay show={showStrike} />
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col items-center z-10 w-full pb-32 transition-transform duration-300 ${gameState !== 'start' ? 'pr-44' : ''} ${feedback === 'wrong' ? 'animate-shake' : ''}`}>
+      <div className={`flex-1 flex flex-col items-center z-10 w-full pb-32 transition-transform duration-300 ${gameState !== 'setup' ? 'pr-44' : ''} ${feedback === 'wrong' ? 'animate-shake' : ''}`}>
         
         {renderHeaderInfo()}
 
-        {gameState === 'start' && renderStartScreen()}
+        {gameState === 'setup' && renderSetupScreen()}
         {gameState === 'game_over' && renderGameOver()}
 
         {(gameState === 'playing' || gameState === 'round_over') && (
@@ -542,8 +956,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
 
       {/* Bottom Input Area */}
       {gameState === 'playing' && (
-        <div className={`absolute bottom-0 left-0 w-[calc(100%-11rem)] ${isDark ? 'bg-[#030712] border-[#1e293b]' : 'bg-white border-blue-200'} border-t-8 p-6 shadow-[0_-30px_60px_rgba(0,0,0,0.9)] z-20`}>
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-transparent via-yellow-500/50 to-transparent"></div>
+        <div className={`absolute bottom-0 left-0 w-[calc(100%-11rem)] ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} border-t p-6 shadow-2xl z-20`}>
           <div className="max-w-5xl mx-auto relative">
             <div className="text-center mb-6 text-xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-4">
                <div className={`h-px w-16 ${currentPlayer === 1 ? 'bg-blue-500' : 'bg-green-500'}`}></div>
@@ -566,7 +979,7 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
                  value={inputValue}
                  onChange={(e) => setInputValue(e.target.value)}
                  placeholder="TYPE YOUR ANSWER..."
-                 className={`flex-1 ${isDark ? 'bg-[#0f172a] text-white border-[#334155]' : 'bg-slate-50 text-slate-900 border-slate-200'} placeholder-slate-600 px-8 py-5 rounded-2xl font-black text-3xl uppercase tracking-wider focus:outline-none focus:ring-4 focus:ring-yellow-500/50 border-[3px] border-[#334155] shadow-[inset_0_4px_10px_rgba(0,0,0,0.5)] transition-all`}
+                 className={`flex-1 ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-slate-50 text-slate-900 border-slate-200'} placeholder-slate-400 px-8 py-5 rounded-2xl font-black text-2xl uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 border-2 shadow-sm transition-all`}
                  autoComplete="off"
                />
                <button 

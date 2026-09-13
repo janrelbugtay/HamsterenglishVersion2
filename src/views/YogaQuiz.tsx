@@ -155,7 +155,7 @@ export function YogaQuiz({ onViewChange, initialGame }: { onViewChange: (view: V
   }
 
   return (
-    <div id="game-container" className="h-[calc(100vh-2rem)] w-full -m-4 md:-m-8 bg-[#ccfbf1] text-slate-900 flex flex-col font-sans overflow-hidden relative selection:bg-teal-500/30 rounded-xl" 
+    <div id="game-container" className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] w-full -m-4 md:-m-8 bg-[#ccfbf1] text-slate-900 flex flex-col font-sans overflow-hidden relative selection:bg-teal-500/30 rounded-xl" 
          style={{ margin: '-1rem', height: 'calc(100% + 2rem)', backgroundImage: 'radial-gradient(#99f6e4 2px, transparent 2px)', backgroundSize: '40px 40px' }}>
       
       <style>{`
@@ -766,15 +766,9 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
 }
 
 
-const fallbackEmojis = ['🧘‍♀️', '🙆‍♀️', '🧎‍♀️', '🧍‍♀️', '🚶‍♀️', '🏃‍♀️', '🤸‍♀️', '🤸‍♂️'];
+const fallbackEmojis = ['🧘‍♀️', '🙆‍♀️', '🧎‍♀️', '🧍‍♀️', '🚶‍♀️', '🏃‍♀️', '🤸‍♀️', '🤸‍♂️', '🧘‍♂️', '🙆‍♂️', '🧎‍♂️', '🧍‍♂️'];
 const AVAILABLE_POSES = [
-    ...fallbackEmojis.map(e => ({ type: 'emoji', value: e })),
-    { type: 'image', value: '/Gemini_Generated_Image_8sdnyn8sdnyn8sdn.png' },
-    { type: 'image', value: '/Gemini_Generated_Image_40k1j140k1j140k1.png' },
-    { type: 'image', value: '/Gemini_Generated_Image_f2iu2ef2iu2ef2iu.png' },
-    { type: 'image', value: '/Gemini_Generated_Image_fdwj35fdwj35fdwj.png' },
-    { type: 'image', value: '/Gemini_Generated_Image_hdkz3whdkz3whdkz.png' },
-    { type: 'image', value: '/Gemini_Generated_Image_l660sql660sql660.png' }
+    ...fallbackEmojis.map(e => ({ type: 'emoji', value: e }))
 ];
 
 function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
@@ -782,7 +776,12 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
     const [activePoses, setActivePoses] = useState<string[]>(() => {
         try {
             const saved = localStorage.getItem('yogaActivePoses_v1');
-            if (saved) return JSON.parse(saved);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Validate that all saved poses actually exist
+                const validPoses = parsed.filter((p: string) => AVAILABLE_POSES.some(ap => ap.value === p));
+                if (validPoses.length > 0) return validPoses;
+            }
         } catch(e) {}
         return AVAILABLE_POSES.map(p => p.value); // Select all by default
     });
@@ -843,10 +842,10 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
-    let questionTextClass = "text-4xl md:text-6xl xl:text-7xl";
-    let optionTextClass = "text-lg md:text-2xl xl:text-4xl";
-    let playerTextClass = "text-xl md:text-2xl";
-    let optionEmojiClass = "text-[3rem] sm:text-[4rem] md:text-[6rem] lg:text-[7rem]";
+    let questionTextClass = "text-3xl md:text-4xl xl:text-5xl";
+    let optionTextClass = "text-base md:text-xl xl:text-2xl";
+    let playerTextClass = "text-lg md:text-xl";
+    let optionEmojiClass = "text-[3rem] sm:text-[4rem] md:text-[5rem] lg:text-[6rem]";
 
     if (uiScale === 'small') {
         questionTextClass = "text-2xl md:text-4xl xl:text-5xl";
@@ -854,10 +853,10 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
         playerTextClass = "text-base md:text-lg";
         optionEmojiClass = "text-[2rem] sm:text-[3rem] md:text-[4rem] lg:text-[5rem]";
     } else if (uiScale === 'big') {
-        questionTextClass = "text-6xl md:text-8xl xl:text-9xl";
-        optionTextClass = "text-2xl md:text-4xl xl:text-6xl";
-        playerTextClass = "text-3xl md:text-4xl";
-        optionEmojiClass = "text-[4rem] sm:text-[5rem] md:text-[7rem] lg:text-[9rem]";
+        questionTextClass = "text-5xl md:text-6xl xl:text-7xl";
+        optionTextClass = "text-xl md:text-3xl xl:text-4xl";
+        playerTextClass = "text-2xl md:text-3xl";
+        optionEmojiClass = "text-[4rem] sm:text-[5rem] md:text-[6rem] lg:text-[7rem]";
     }
 
     const toggleFullscreen = () => {
@@ -1136,7 +1135,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                       </div>
                       
                       {/* Header with progress */}
-                      <div className="bg-teal-50 pt-24 md:pt-28 pb-4 md:pb-8 px-4 border-b-8 border-teal-100 flex flex-col items-center shrink-0 gap-6">
+                      <div className="bg-teal-50 pt-20 md:pt-20 pb-4 px-4 border-b-[4px] border-teal-100 flex flex-col items-center shrink-0 gap-4">
                           {/* Center Teams */}
                           <div className="w-full max-w-[95vw] overflow-x-auto custom-scrollbar px-4 pb-4">
                               <div className="flex flex-nowrap justify-start lg:justify-center items-center gap-4 md:gap-6 min-w-full w-max mx-auto">
@@ -1159,11 +1158,11 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                           </div>
                       </div>
 
-                      <div className="p-6 md:p-10 xl:p-16 flex-grow flex flex-col justify-start overflow-y-auto bg-white/50">
+                      <div className="p-4 md:p-6 flex-grow flex flex-col justify-center overflow-hidden bg-white/50">
                           {/* Question */}
-                          <div className="text-center mb-10 md:mb-16">
-                              <p className="text-teal-500 font-black uppercase tracking-widest text-lg md:text-xl mb-4 md:mb-6">Complete the sentence...</p>
-                              <h2 className={`${questionTextClass} font-black text-indigo-900 bg-indigo-50 py-12 md:py-20 px-10 md:px-20 rounded-[3rem] border-8 border-indigo-100 shadow-inner inline-block min-w-[60%] max-w-[95%] leading-tight`}>
+                          <div className="text-center mb-4 md:mb-6 shrink-0">
+                              <p className="text-teal-500 font-black uppercase tracking-widest text-sm md:text-base mb-2">Complete the sentence...</p>
+                              <h2 className={`${questionTextClass} font-black text-indigo-900 bg-indigo-50 py-6 md:py-10 px-8 md:px-12 rounded-[2rem] border-[6px] border-indigo-100 shadow-inner inline-block min-w-[60%] max-w-[95%] leading-tight`}>
                                   {quiz.questions[currentIdx]?.text}
                               </h2>
                           </div>
@@ -1172,7 +1171,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                           <div className="flex flex-row justify-center items-stretch gap-2 sm:gap-4 md:gap-6 w-full max-w-[98%] xl:max-w-7xl mx-auto">
                               {shuffledOptions.map((opt, index) => {
                                   const isMany = shuffledOptions.length > 4;
-                                  let btnClasses = `flex-1 min-w-0 bg-white border-4 md:border-8 border-gray-100 text-gray-700 font-bold p-2 sm:p-4 md:p-6 ${isMany ? 'rounded-[1.5rem] md:rounded-[2rem]' : 'lg:p-10 rounded-[3rem]'} transition-all duration-300 flex flex-col items-center text-center shadow-lg relative group outline-none `;
+                                  let btnClasses = `flex-1 min-w-0 bg-white border-4 md:border-[6px] border-gray-100 text-gray-700 font-bold p-2 sm:p-3 md:p-4 ${isMany ? 'rounded-[1.5rem]' : 'md:p-6 rounded-[2rem]'} transition-all duration-300 flex flex-col items-center text-center shadow-lg relative group outline-none `;
                                   
                                   if (isAnswering) {
                                       if (index === selectedOption) {
@@ -1197,7 +1196,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                                          onClick={() => handleAnswer(index, opt.isCorrect)}
                                          className={btnClasses}
                                       >
-                                          <div className={`w-full aspect-square ${isMany ? 'md:h-36 xl:h-48' : 'md:h-56 xl:h-72'} md:aspect-auto rounded-xl md:rounded-[2rem] overflow-hidden relative bg-teal-50/50 border-4 border-teal-100 mb-2 md:mb-6 shadow-inner transition-transform duration-300 shrink-0 flex items-center justify-center ${!isAnswering ? 'group-hover:scale-[1.05]' : ''}`}>
+                                          <div className={`w-full aspect-square max-h-[25vh] ${isMany ? 'md:max-h-[20vh]' : ''} rounded-xl md:rounded-[1.5rem] overflow-hidden relative bg-teal-50/50 border-4 border-teal-100 mb-2 md:mb-4 shadow-inner transition-transform duration-300 shrink-0 flex items-center justify-center ${!isAnswering ? 'group-hover:scale-[1.05]' : ''}`}>
                                               {(() => {
                                                   const safePoses = [...activePoses];
                                                   for (const p of AVAILABLE_POSES) {
