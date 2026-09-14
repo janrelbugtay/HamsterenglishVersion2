@@ -880,11 +880,13 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             if (pointer.history.length > 20) pointer.history.shift();
 
             if (graphicsState.current.isQuestionActive) {
+                let poppedThisFrame = false;
                 graphicsState.current.bubbles.forEach(b => {
+                    if (poppedThisFrame || b.popped) return;
                     // Make it slightly easier to pop by allowing collision across history points
                     const isHitting = b.checkCollision(pointer.x, pointer.y, pIndex) ||
                                       (pointer.history.length > 5 && b.checkCollision(pointer.history[pointer.history.length - 5].x, pointer.history[pointer.history.length - 5].y, pIndex));
-                    if (isHitting) handlePop(b, pIndex);
+                    if (isHitting) { handlePop(b, pIndex); poppedThisFrame = true; }
                 });
             }
         } else if (pointer.history.length > 0) {
@@ -1064,6 +1066,35 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     }
   }, [screen]);
 
+  useEffect(() => {
+    if (screen !== 'study' || !activeQuiz) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'ArrowRight') {
+            if (studyIndex < activeQuiz.questions.length - 1) {
+                setStudyIndex(prev => prev + 1);
+                setStudySelectedOption(null);
+            } else {
+                setScreen('setup');
+                setStudyIndex(0);
+                setStudySelectedOption(null);
+            }
+        } else if (e.key === 'ArrowLeft') {
+            if (studyIndex > 0) {
+                setStudyIndex(prev => prev - 1);
+                setStudySelectedOption(null);
+            } else {
+                setScreen('setup');
+                setStudyIndex(0);
+                setStudySelectedOption(null);
+            }
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [screen, studyIndex, activeQuiz]);
+
   return (
     <div id="game-container" className="h-[calc(100vh-2rem)] w-full -m-4 md:-m-8 bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-white flex flex-col font-['Fredoka',sans-serif] overflow-hidden relative selection:bg-cyan-500/30 rounded-xl" style={{ margin: '-1rem', height: 'calc(100% + 2rem)' }} ref={containerRef}>
       
@@ -1081,9 +1112,22 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         <ArrowLeft size={24} />
       </button>
         <div className="absolute top-4 right-4 z-[70] flex gap-3 pointer-events-auto">
-              {screen === 'study' && activeQuiz && (
+        {screen === 'game' && (
+          <>
+            <button onClick={() => showResults()} className="w-12 h-12 flex justify-center items-center rounded-full bg-red-500/20 dark:bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md border border-red-500/50 text-red-600 dark:text-red-400 transition-all shadow-lg cursor-pointer" title="End Game Now">
+                <Flag size={20} />
+            </button>
+            <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="w-12 h-12 flex justify-center items-center rounded-full bg-white/20 dark:bg-black/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-slate-800 dark:text-white transition-all shadow-lg cursor-pointer">
+                <Settings size={20} />
+            </button>
+          </>
+        )}
+        <FullscreenButton targetId="game-container" className="" />
+      </div>
+
+      {screen === 'study' && activeQuiz && (
         <div 
-            className="absolute inset-0 z-50 flex flex-col bg-white overflow-hidden" 
+            className="absolute inset-0 z-[100] flex flex-col bg-white overflow-hidden" 
             id="study-container"
         >
             <div className="absolute top-4 left-4 z-20">
@@ -1172,19 +1216,6 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         </div>
       )}
 
-      {screen === 'game' && (
-          <>
-            <button onClick={() => showResults()} className="w-12 h-12 flex justify-center items-center rounded-full bg-red-500/20 dark:bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md border border-red-500/50 text-red-600 dark:text-red-400 transition-all shadow-lg cursor-pointer" title="End Game Now">
-                <Flag size={20} />
-            </button>
-            <button onClick={() => setShowInGameSettings(!showInGameSettings)} className="w-12 h-12 flex justify-center items-center rounded-full bg-white/20 dark:bg-black/40 hover:bg-white/30 backdrop-blur-md border border-white/30 text-slate-800 dark:text-white transition-all shadow-lg cursor-pointer">
-                <Settings size={20} />
-            </button>
-          </>
-        )}
-        <FullscreenButton targetId="game-container" className="" />
-      </div>
-      
       {screen === 'game' && showInGameSettings && (
           <div className="absolute right-4 top-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-2 border-blue-500 rounded-3xl p-6 shadow-2xl w-80 pointer-events-auto z-[80]">
               <div className="flex justify-between items-center mb-6">
@@ -1523,59 +1554,60 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10"></canvas>
 
             <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none z-20 pt-20">
-                <div className="flex justify-between items-start w-full gap-4">
-                    
-                    <div className="glass-panel bg-white/90 dark:bg-slate-900/80 rounded-2xl p-4 min-w-[200px] border-l-4 border-blue-500 flex items-center gap-4 backdrop-blur-md">
-                        <div className="min-w-[3rem] px-3 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold shadow-[0_0_15px_rgba(59,130,246,0.6)]">{numPlayers === 2 ? p1Name : p1Name}</div>
-                        <div>
-                            <div className="text-sm font-bold text-blue-400 uppercase tracking-wider">Score</div>
-                            <div className="text-3xl font-black">{scores[0]}</div>
-                        </div>
-                    </div>
-
-                    <div className="glass-panel bg-white/90 dark:bg-slate-900/90 rounded-2xl flex-grow max-w-4xl p-6 text-center border-t-4 border-indigo-500 shadow-2xl relative overflow-hidden backdrop-blur-xl">
-                        <h1 className="text-2xl md:text-4xl font-black text-slate-800 dark:text-white leading-relaxed drop-shadow-md">{questionText}</h1>
-                        
-                        {showCombo && (
-                            <div key={`combo-${combo}`} className="absolute right-4 top-1/2 -translate-y-1/2 text-center animate-pop">
-                                <div className="text-xs font-bold text-yellow-400 uppercase tracking-widest">Combo</div>
-                                <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-orange-500">x{combo}</div>
+                <div className="flex justify-center items-start w-full gap-4 relative">
+                    <div className="absolute left-1/2 -translate-x-1/2 top-0 pointer-events-auto">
+                        {countdown !== null && (
+                            <div className="glass-panel bg-blue-100/90 dark:bg-blue-900/80 rounded-full px-8 py-3 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+                                <span className="text-2xl font-bold text-blue-200">Bubbles in <span className="text-slate-800 dark:text-white text-3xl font-black">{countdown}</span>...</span>
                             </div>
                         )}
                     </div>
-
-                    {numPlayers === 2 ? (
-                        <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-4 min-w-[180px] md:min-w-[220px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
-                            <div className="flex flex-col items-center gap-1 mb-2">
-                                <div className="min-w-[4rem] px-4 h-10 rounded-full bg-red-500 flex items-center justify-center text-lg font-black text-white shadow-inner uppercase tracking-wider">{p2Name}</div>
-                                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>
-                            </div>
-                            <div className="text-5xl md:text-7xl font-black text-red-500 dark:text-red-400 drop-shadow-sm tabular-nums tracking-tighter">{scores[1]}</div>
-                        </div>
-                    ) : (
-                        <div className="min-w-[180px] md:min-w-[220px]"></div>
-                    )}
                 </div>
 
-                <div className="flex justify-between items-end w-full pointer-events-auto">
+                <div className="absolute top-20 left-6 z-[50] pointer-events-auto">
                     <button onClick={() => {
                         gameState.current.isActive = false;
                         if (questionTimerRef.current) clearInterval(questionTimerRef.current);
                         setScreen('setup');
-                    }} className="glass-panel px-6 py-2 rounded-full hover:bg-white/20 font-bold border border-white/20 cursor-pointer">Exit</button>
-                    
-                    {countdown !== null ? (
-                        <div className="glass-panel bg-blue-100/90 dark:bg-blue-900/80 rounded-full px-8 py-3 border-2 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
-                            <span className="text-2xl font-bold text-blue-200">Bubbles in <span className="text-slate-800 dark:text-white text-3xl font-black">{countdown}</span>...</span>
+                    }} className="glass-panel px-6 py-2 rounded-full hover:bg-white/20 font-bold border border-white/20 cursor-pointer text-slate-800 dark:text-white shadow-sm transition-all hover:scale-105 active:scale-95 flex items-center justify-center">Exit</button>
+                </div>
+
+                <div className="flex justify-center items-end w-full gap-2 md:gap-4 pointer-events-none mt-auto px-4 sm:px-12 lg:px-20 relative z-30">
+                    <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105">
+                        <div className="flex flex-col items-center gap-1 mb-1">
+                            <div className="min-w-[3rem] md:min-w-[4rem] px-2 md:px-3 h-6 md:h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs md:text-sm font-black text-white shadow-inner uppercase tracking-wider">{p1Name}</div>
+                            <div className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>
                         </div>
-                    ) : <div></div>}
-                    <div className="w-[100px]"></div>
+                        <div className="text-3xl md:text-5xl font-black text-blue-500 dark:text-blue-400 drop-shadow-sm tabular-nums tracking-tighter">{scores[0]}</div>
+                    </div>
+
+                    <div className="glass-panel bg-white/90 dark:bg-slate-900/90 rounded-3xl w-full max-w-4xl p-4 md:p-6 text-center border-t-4 border-indigo-500 shadow-2xl relative overflow-hidden backdrop-blur-xl mb-2 pointer-events-auto flex-1">
+                        <h1 className="text-xl md:text-3xl font-black text-slate-800 dark:text-white leading-relaxed drop-shadow-md">{questionText}</h1>
+                        
+                        {showCombo && (
+                            <div key={`combo-${combo}`} className="absolute right-4 top-1/2 -translate-y-1/2 text-center animate-pop">
+                                <div className="text-[10px] md:text-xs font-bold text-yellow-400 uppercase tracking-widest">Combo</div>
+                                <div className="text-xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-orange-500">x{combo}</div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {numPlayers === 2 ? (
+                        <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105">
+                            <div className="flex flex-col items-center gap-1 mb-1">
+                                <div className="min-w-[3rem] md:min-w-[4rem] px-2 md:px-3 h-6 md:h-8 rounded-full bg-red-500 flex items-center justify-center text-xs md:text-sm font-black text-white shadow-inner uppercase tracking-wider">{p2Name}</div>
+                                <div className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>
+                            </div>
+                            <div className="text-3xl md:text-5xl font-black text-red-500 dark:text-red-400 drop-shadow-sm tabular-nums tracking-tighter">{scores[1]}</div>
+                        </div>
+                    ) : (
+                        <div className="min-w-[100px] md:min-w-[140px] shrink-0"></div>
+                    )}
                 </div>
             </div>
         </div>
       )}
-
-      {/* Screen: Results */}
+            {/* Screen: Results */}
       {screen === 'results' && (
         <div className="absolute inset-0 z-50 bg-slate-100 dark:bg-[#0f121b] flex flex-col items-center justify-center overflow-hidden font-sans">
             <div className="rounded-3xl p-8 max-w-2xl w-full text-center relative z-10 bg-white dark:bg-[#252836] shadow-2xl border border-slate-200 dark:border-slate-700/50">
