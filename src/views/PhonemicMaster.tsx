@@ -8,9 +8,10 @@ export function PhonemicMaster({ onViewChange }: { onViewChange: (view: ViewStat
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch(err => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
+      if (containerRef.current && containerRef.current.requestFullscreen) {
+        const p = containerRef.current.requestFullscreen();
+        if (p && p.catch) p.catch(() => {});
+      }
     } else {
       document.exitFullscreen();
     }

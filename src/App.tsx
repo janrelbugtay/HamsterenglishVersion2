@@ -61,6 +61,30 @@ export default function App() {
       setCurrentView("public-dashboard");
       return;
     }
+
+    const gameViews = [
+      "mystery-box", "neon-chain", "bubble-pop", "flashcards-match", "yoga-quiz", 
+      "bubble-sentence-pro", "family-feud", "sumo", "hamster-pop-quiz", "student-race", 
+      "letter-lock", "tic-tac-toe", "phonemic-master"
+    ];
+    
+    if (gameViews.includes(view)) {
+      try {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            const promise = document.documentElement.requestFullscreen();
+            if (promise && promise.catch) {
+              promise.catch(err => {
+                console.warn("Fullscreen request failed (promise rejected):", err);
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Fullscreen request failed (sync throw):", err);
+      }
+    }
+
     setCurrentView(view);
     if (data) {
       setSelectedGame(data);

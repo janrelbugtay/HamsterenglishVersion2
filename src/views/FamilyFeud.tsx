@@ -824,11 +824,19 @@ export function FamilyFeud({ onViewChange, initialGame }: { onViewChange: (view:
         </button>
         <button 
           onClick={async () => {
-            if (!document.fullscreenElement) {
-              if (gameContainerRef.current) await gameContainerRef.current.requestFullscreen();
-            } else {
-              await document.exitFullscreen();
-            }
+            try {
+              if (!document.fullscreenElement) {
+                if (gameContainerRef.current) {
+                  const p = gameContainerRef.current.requestFullscreen();
+                  if (p && p.catch) p.catch(() => {});
+                }
+              } else {
+                if (document.exitFullscreen) {
+                  const p = document.exitFullscreen();
+                  if (p && p.catch) p.catch(() => {});
+                }
+              }
+            } catch (err) {}
           }}
           className={`flex items-center gap-2 p-2 rounded-full transition-colors backdrop-blur-md border ${isDark ? 'text-white/80 hover:text-white bg-black/20 hover:bg-black/50 border-white/20' : 'text-slate-600 hover:text-slate-900 bg-white/50 hover:bg-white border-slate-300'}`}
           title="Toggle Fullscreen"

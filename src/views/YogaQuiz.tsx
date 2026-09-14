@@ -861,9 +861,8 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
 
     const toggleFullscreen = () => {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch((err) => {
-                console.error(`Error attempting to enable fullscreen mode: ${err.message} (${err.name})`);
-            });
+            const p = document.documentElement.requestFullscreen();
+            if (p && p.catch) p.catch(() => {});
         } else {
             document.exitFullscreen();
         }

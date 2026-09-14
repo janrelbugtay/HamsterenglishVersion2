@@ -211,7 +211,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await signInWithEmailAndPassword(auth, email, pass);
     } catch (error: any) {
       setAuthError(`Sign in failed: ${error.message}`);
-      throw error;
+      console.error(error);
     } finally {
       setIsAuthenticating(false);
     }
@@ -237,7 +237,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     } catch (error: any) {
       setAuthError(`Sign up failed: ${error.message}`);
-      throw error;
+      console.error(error);
     } finally {
       setIsAuthenticating(false);
     }
