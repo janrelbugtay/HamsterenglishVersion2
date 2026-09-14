@@ -701,7 +701,12 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                 gameState.current.currentQuestionIndex++;
                 setCurrentQuestionIndex(gameState.current.currentQuestionIndex);
                 setShowCombo(false);
-                startQuestion();
+                
+                if (gameState.current.currentQuestionIndex >= gameState.current.questions.length) {
+                    showResults();
+                } else {
+                    startQuestion();
+                }
             }, 2000);
 
         } else {

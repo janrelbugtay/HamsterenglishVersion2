@@ -766,7 +766,7 @@ function parsePastedQuiz(rawText: string): Partial<Question>[] {
 }
 
 
-const fallbackEmojis = ['🧘‍♀️', '🙆‍♀️', '🧎‍♀️', '🧍‍♀️', '🚶‍♀️', '🏃‍♀️', '🤸‍♀️', '🤸‍♂️', '🧘‍♂️', '🙆‍♂️', '🧎‍♂️', '🧍‍♂️', '💆‍♀️', '💆‍♂️', '🧜‍♀️', '🧜‍♂️', '🏄‍♀️', '🏄‍♂️', '🏊‍♀️', '🏊‍♂️', '🧗‍♀️', '🧗‍♂️'];
+const fallbackEmojis = ['🧘', '🙆', '🧎', '🧍', '🚶', '🏃', '🤸'];
 const AVAILABLE_POSES = [
     ...fallbackEmojis.map(e => ({ type: 'emoji', value: e }))
 ];
@@ -775,7 +775,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
     const [gameState, setGameState] = useState<'start' | 'playing' | 'end'>('start');
     const [activePoses, setActivePoses] = useState<string[]>(() => {
         try {
-            const saved = localStorage.getItem('yogaActivePoses_v1');
+            const saved = localStorage.getItem('yogaActivePoses_v3');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Validate that all saved poses actually exist
@@ -787,7 +787,7 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
     });
 
     useEffect(() => {
-        localStorage.setItem('yogaActivePoses_v1', JSON.stringify(activePoses));
+        localStorage.setItem('yogaActivePoses_v3', JSON.stringify(activePoses));
     }, [activePoses]);
 
     const togglePose = (val: string) => {
@@ -888,12 +888,9 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
         // Shuffle the rendering order so the correct answer isn't always in the same visual position
         opts.sort(() => Math.random() - 0.5);
         
-        // Randomly assign a unique pose index from the currently active poses to each option
-        // To ensure we don't get duplicates (unless there are more options than poses), we shuffle an array of available indices
-        let availablePoseIndices = Array.from({ length: Math.max(opts.length, activePoses.length) }, (_, i) => i % activePoses.length);
-        availablePoseIndices.sort(() => Math.random() - 0.5);
-        
-        setShuffledOptions(opts.map((opt, idx) => ({...opt, poseIndex: availablePoseIndices[idx]})));
+        // Assign a sequential pose index based on visual rendering order
+        // This guarantees no duplicated poses in the grid (unless there are more options than checked poses)
+        setShuffledOptions(opts.map((opt, idx) => ({...opt, poseIndex: idx})));
     };
 
     const handleAnswer = (index: number, isCorrect: boolean) => {
@@ -1203,7 +1200,13 @@ function YogaGame({ quiz, onBack }: { quiz: Quiz, onBack: () => void }) {
                                          onClick={() => handleAnswer(index, opt.isCorrect)}
                                          className={btnClasses}
                                       >
+                                          {isAnswering && (index === selectedOption || opt.isCorrect) && (
+                                              <div className={`absolute -top-4 -right-4 md:-top-6 md:-right-6 w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center text-white text-2xl md:text-4xl font-black shadow-lg z-30 animate-bounce ${opt.isCorrect ? 'bg-green-500' : 'bg-red-500'}`}>
+                                                  {opt.isCorrect ? '✓' : '✗'}
+                                              </div>
+                                          )}
                                           <div className={`w-full aspect-square max-h-[25vh] ${isMany ? 'md:max-h-[20vh]' : ''} rounded-xl md:rounded-[1.5rem] overflow-hidden relative bg-teal-50/50 border-4 border-teal-100 mb-2 md:mb-4 shadow-inner transition-transform duration-300 shrink-0 flex items-center justify-center ${!isAnswering ? 'group-hover:scale-[1.05]' : ''}`}>
+
                                               {(() => {
                                                   // We use the pre-assigned random poseIndex for this option (so it doesn't change on render)
                                                   // And if we have more options than active poses, we loop back through the active poses
