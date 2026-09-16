@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { Play, Users, Clock, PlusCircle } from "lucide-react";
 import { Game, ViewState } from "../types";
 import { cn } from "../lib/utils";
+import { GameThumbnail } from "../components/GameThumbnail";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
@@ -70,6 +71,34 @@ function FeaturedGamesSection({
 
   const allGames: Game[] = [
     {
+      id: "squid-game-picker",
+      title: "NAME PICKER",
+      description: "Pick students randomly or play a survival game using a Squid Game theme.",
+      difficulty: "Medium",
+      players: "Classroom",
+      time: "5m",
+      subject: "Classroom Management",
+      grade: "All",
+      imageUrl: "https://drive.google.com/thumbnail?id=1mDD25-FfKbMt7WA_P1HHQ3qCjp9VmOMP&sz=w1000",
+      isAI: false,
+      color: "from-rose-600 to-rose-400",
+      icon: "🎯",
+    },
+    {
+      id: "neon-chain",
+      title: "Neon Chain",
+      description: "A fast-paced category word game with glowing visuals.",
+      difficulty: "Hard",
+      players: "2 Teams",
+      time: "10-15m",
+      subject: "Vocabulary",
+      grade: "B1-B2",
+      imageUrl: "https://drive.google.com/thumbnail?id=1kovfYZSlp6X8HTqQ9OF_gSpf3wgJgNYG&sz=w1000",
+      isAI: false,
+      color: "from-cyan-400 to-blue-600",
+      icon: "⚡",
+    },
+    {
       id: "mystery-box",
       title: "Mystery Box",
       description:
@@ -84,21 +113,7 @@ function FeaturedGamesSection({
       color: "from-orange-400 to-yellow-500",
       icon: "🎁",
     },
-    {
-      id: "neon-chain",
-      title: "Neon Chain",
-      description:
-        "Link words together in this futuristic vocabulary challenge!",
-      difficulty: "Medium",
-      players: "2-4 Teams",
-      time: "10m",
-      subject: "Vocabulary",
-      grade: "A2-C1",
-      imageUrl: "https://drive.google.com/thumbnail?id=1kovfYZSlp6X8HTqQ9OF_gSpf3wgJgNYG&sz=w1000",
-      isAI: false,
-      color: "from-cyan-400 to-purple-500",
-      icon: "⚡",
-    },
+    
     {
       id: "bubble-pop",
       title: "Bubble Pop",
@@ -230,20 +245,7 @@ function FeaturedGamesSection({
       icon: "🏎️",
     },
     
-    {
-      id: "squid-game-picker",
-      title: "Squid Game Picker",
-      description: "Pick students randomly or play a survival game using a Squid Game theme.",
-      difficulty: "Medium",
-      players: "Classroom",
-      time: "5m",
-      subject: "Classroom Management",
-      grade: "All",
-      imageUrl: "https://images.unsplash.com/photo-1634152962476-4b8a00e1915c?q=80&w=1000&auto=format&fit=crop",
-      isAI: false,
-      color: "from-rose-600 to-rose-400",
-      icon: "🦑",
-    },
+    
     {
       id: "tic-tac-toe",
       title: "Tic Tac Toe Battle",
@@ -311,7 +313,18 @@ function GameCard({
       onClick={() => onViewChange && onViewChange(game.id as ViewState)}
       className="w-full relative aspect-[1000/791] bg-white dark:bg-slate-800 border-[6px] border-white rounded-[40px] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.08)] group hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(0,0,0,0.12)] ring-1 ring-slate-100 transition-all duration-300 cursor-pointer"
     >
-      {game.imageUrl ? (
+      {game.id === 'squid-game-picker' ? (
+        <>
+          <div className="w-full h-full scale-[1.12] group-hover:scale-[1.20] transition-transform duration-700 pointer-events-none">
+             <GameThumbnail gameType={game.id} info={{...game, icon: game.imageUrl}} />
+          </div>
+          <div className="absolute inset-0 bg-brand-purple/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-30">
+            <div className="w-16 h-16 bg-white dark:bg-slate-800/90 backdrop-blur-sm rounded-full flex items-center justify-center text-brand-purple shadow-lg transform scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 delay-75">
+              <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            </div>
+          </div>
+        </>
+      ) : game.imageUrl ? (
         <>
           <img
             src={game.imageUrl}
