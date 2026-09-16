@@ -125,6 +125,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
   
   const [numPlayers, setNumPlayers] = useState(1);
   const [scores, setScores] = useState([0, 0]);
+  const [frozenTeams, setFrozenTeams] = useState([false, false]);
   const [questionText, setQuestionText] = useState("Loading...");
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -164,6 +165,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     isActive: false,
     numPlayers: 1,
     scores: [0, 0],
+    frozenTeams: [false, false],
     currentQuestionIndex: 0,
     combo: 0,
     maxCombo: 0,
@@ -609,6 +611,9 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     setQuestionText(q.text);
     speakText(q.text);
     
+    gameState.current.frozenTeams = [false, false];
+    setFrozenTeams([false, false]);
+    
     graphicsState.current.bubbles = []; 
     graphicsState.current.floatingTexts = [];
     graphicsState.current.isQuestionActive = false;
@@ -651,6 +656,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
 
   const handlePop = (bubble: any, playerIndex: number) => {
     if (!graphicsState.current.isQuestionActive || bubble.popped || bubble.state === 'shaking') return;
+    if (gameState.current.frozenTeams[playerIndex]) return;
     
     bubble.state = 'shaking'; 
     
@@ -722,6 +728,21 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
             const w = containerRef.current?.clientWidth || 800;
             const targetX = playerIndex === 0 ? 100 : w - 100;
             graphicsState.current.floatingTexts.push(new FloatingText(bubble.x, bubble.y, `-5`, '#ef4444', true, targetX, 80));
+            
+            if (gameState.current.numPlayers === 2) {
+                const otherTeamIndex = playerIndex === 0 ? 1 : 0;
+                if (gameState.current.frozenTeams[otherTeamIndex]) {
+                    // Unfreeze both since both got it wrong
+                    gameState.current.frozenTeams = [false, false];
+                    setFrozenTeams([false, false]);
+                } else {
+                    // Freeze the team that got it wrong
+                    const newFrozen = [...gameState.current.frozenTeams];
+                    newFrozen[playerIndex] = true;
+                    gameState.current.frozenTeams = newFrozen;
+                    setFrozenTeams(newFrozen);
+                }
+            }
             
             if (canvasRef.current) {
                 canvasRef.current.classList.add('shake');
@@ -1552,6 +1573,20 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
     "bg-[radial-gradient(circle_at_50%_100%,#dbeafe,#f8fafc)] dark:bg-[radial-gradient(circle_at_50%_100%,#1e3a8a,#0f172a)]"
 }`}></div>}
             <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-10"></canvas>
+            
+            {/* Frozen Overlays */}
+            {frozenTeams[0] && (
+                <div className="absolute top-0 left-0 w-1/2 h-full bg-cyan-400/20 backdrop-blur-[2px] border-r-4 border-cyan-300/50 flex flex-col items-center justify-center pointer-events-none z-[15]">
+                    <span className="text-6xl md:text-8xl animate-bounce drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">❄️</span>
+                    <span className="font-black text-white text-3xl md:text-5xl uppercase tracking-widest mt-4 drop-shadow-md">FROZEN</span>
+                </div>
+            )}
+            {frozenTeams[1] && (
+                <div className="absolute top-0 right-0 w-1/2 h-full bg-cyan-400/20 backdrop-blur-[2px] border-l-4 border-cyan-300/50 flex flex-col items-center justify-center pointer-events-none z-[15]">
+                    <span className="text-6xl md:text-8xl animate-bounce drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">❄️</span>
+                    <span className="font-black text-white text-3xl md:text-5xl uppercase tracking-widest mt-4 drop-shadow-md">FROZEN</span>
+                </div>
+            )}
 
             <div className="absolute inset-0 flex flex-col justify-between p-6 pointer-events-none z-20 pt-20">
                 <div className="flex justify-center items-start w-full gap-4 relative">
@@ -1573,7 +1608,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                 </div>
 
                 <div className="flex justify-center items-end w-full gap-2 md:gap-4 pointer-events-none mt-auto px-4 sm:px-12 lg:px-20 relative z-30">
-                    <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105">
+                    <div className={`bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105 relative overflow-hidden ${frozenTeams[0] ? 'opacity-70 grayscale border-cyan-400/50' : ''}`}>
+                        {frozenTeams[0] && <div className="absolute inset-0 bg-cyan-400/20 backdrop-blur-[2px] z-10 flex items-center justify-center pointer-events-none"><span className="text-4xl absolute opacity-50">❄️</span></div>}
                         <div className="flex flex-col items-center gap-1 mb-1">
                             <div className="min-w-[3rem] md:min-w-[4rem] px-2 md:px-3 h-6 md:h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs md:text-sm font-black text-white shadow-inner uppercase tracking-wider">{p1Name}</div>
                             <div className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>
@@ -1593,7 +1629,8 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
                     </div>
                     
                     {numPlayers === 2 ? (
-                        <div className="bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105">
+                        <div className={`bg-white/80 dark:bg-slate-900/80 rounded-3xl p-3 min-w-[100px] md:min-w-[140px] border border-white/40 dark:border-white/10 flex flex-col items-center shadow-xl backdrop-blur-md pointer-events-auto shadow-[0_8px_30px_rgb(0,0,0,0.12)] shrink-0 mb-2 transition-transform hover:scale-105 relative overflow-hidden ${frozenTeams[1] ? 'opacity-70 grayscale border-cyan-400/50' : ''}`}>
+                            {frozenTeams[1] && <div className="absolute inset-0 bg-cyan-400/20 backdrop-blur-[2px] z-10 flex items-center justify-center pointer-events-none"><span className="text-4xl absolute opacity-50">❄️</span></div>}
                             <div className="flex flex-col items-center gap-1 mb-1">
                                 <div className="min-w-[3rem] md:min-w-[4rem] px-2 md:px-3 h-6 md:h-8 rounded-full bg-red-500 flex items-center justify-center text-xs md:text-sm font-black text-white shadow-inner uppercase tracking-wider">{p2Name}</div>
                                 <div className="text-[9px] md:text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">Score</div>

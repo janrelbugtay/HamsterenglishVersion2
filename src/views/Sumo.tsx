@@ -642,7 +642,7 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
         </div>
   
         {/* Blue Team Side */}
-        <div className="w-full md:w-1/4 bg-blue-700 rounded-3xl md:rounded-[2.5rem] flex flex-row md:flex-col p-3 md:p-6 pt-16 md:pt-16 shadow-2xl border-b-4 md:border-b-0 md:border-r-8 border-blue-900/50">
+        <div className="relative z-10 w-full md:w-1/4 bg-blue-700 rounded-3xl md:rounded-[2.5rem] flex flex-row md:flex-col p-3 md:p-6 pt-16 md:pt-16 shadow-2xl border-b-4 md:border-b-0 md:border-r-8 border-blue-900/50">
           <div className="flex flex-col md:flex-row justify-between items-center mb-0 md:mb-6 pr-4 md:pr-0">
             <h2 className="text-xs md:text-2xl font-black text-slate-800 dark:text-white italic uppercase tracking-widest whitespace-nowrap">BLUE TEAM</h2>
             <div className="flex gap-1 bg-slate-200 dark:bg-black/30 px-3 md:px-4 py-2 rounded-xl">
@@ -653,12 +653,17 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
             </div>
           </div>
           
-          <div className="hidden md:flex bg-blue-800/80 flex-1 rounded-3xl p-4 md:p-8 items-center justify-center shadow-inner mb-6 relative overflow-hidden border border-blue-400/20">
-            <p className="text-slate-800 dark:text-white text-2xl md:text-4xl font-black text-center leading-snug drop-shadow-sm">
-              {renderQuestionText(leftTeam.q?.text || "")}
-            </p>
+          <div className="hidden md:flex flex-col bg-blue-800/80 flex-1 rounded-3xl p-4 md:p-8 items-center shadow-inner mb-6 relative overflow-hidden border border-blue-400/20">
+            <div style={{ flexGrow: 1 + Math.max(0, 75 - battlePos) * 0.15, transition: 'flex-grow 0.3s ease-out' }} className="w-full shrink"></div>
+            <div className="shrink-0 z-10 flex flex-col justify-center">
+              <p className="text-slate-800 dark:text-white text-2xl md:text-4xl font-black text-center leading-snug drop-shadow-sm">
+                {renderQuestionText(leftTeam.q?.text || "")}
+              </p>
+            </div>
+            <div style={{ flexGrow: 1, transition: 'flex-grow 0.3s ease-out' }} className="w-full shrink"></div>
+            
             {leftTeam.stunned && (
-              <div className="absolute inset-0 bg-red-600/60 backdrop-blur-sm flex items-center justify-center animate-pulse">
+              <div className="absolute inset-0 bg-red-600/60 backdrop-blur-sm flex items-center justify-center animate-pulse z-20">
                 <span className="text-slate-800 dark:text-white font-black italic text-3xl drop-shadow-lg">MISS!</span>
               </div>
             )}
@@ -681,7 +686,7 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
         </div>
   
         {/* Arena */}
-        <div className="flex-1 bg-[#fefae0] rounded-3xl md:rounded-[3rem] relative border-4 md:border-8 border-amber-900/20 shadow-inner min-h-[150px] mt-16 md:mt-0">
+        <div className="flex-1 bg-[#fefae0] rounded-3xl md:rounded-[3rem] relative z-20 border-4 md:border-8 border-amber-900/20 shadow-inner min-h-[150px] mt-16 md:mt-0">
           {/* Ring Container for clipping */}
           <div className="absolute inset-0 overflow-hidden rounded-3xl md:rounded-[3rem]">
             {/* Ring */}
@@ -718,7 +723,7 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
         </div>
   
         {/* Red Team Side (Options UNDER Question) */}
-        <div className="w-full md:w-1/4 bg-red-700 rounded-3xl md:rounded-[2.5rem] flex flex-row md:flex-col p-3 md:p-6 shadow-2xl border-t-4 md:border-t-0 md:border-l-8 border-red-900/50">
+        <div className="relative z-10 w-full md:w-1/4 bg-red-700 rounded-3xl md:rounded-[2.5rem] flex flex-row md:flex-col p-3 md:p-6 shadow-2xl border-t-4 md:border-t-0 md:border-l-8 border-red-900/50">
           
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-center mb-0 md:mb-6 pl-4 md:pl-0 w-full">
@@ -732,12 +737,17 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
           </div>
   
           {/* Question Area */}
-          <div className="hidden md:flex bg-red-800/80 flex-1 rounded-3xl p-4 md:p-8 items-center justify-center shadow-inner mb-6 relative overflow-hidden border border-red-400/20">
-            <p className="text-slate-800 dark:text-white text-2xl md:text-4xl font-black text-center leading-snug drop-shadow-sm">
-              {renderQuestionText(rightTeam.q?.text || "")}
-            </p>
+          <div className="hidden md:flex flex-col bg-red-800/80 flex-1 rounded-3xl p-4 md:p-8 items-center shadow-inner mb-6 relative overflow-hidden border border-red-400/20">
+            <div style={{ flexGrow: 1 + Math.max(0, battlePos - 25) * 0.15, transition: 'flex-grow 0.3s ease-out' }} className="w-full shrink"></div>
+            <div className="shrink-0 z-10 flex flex-col justify-center">
+              <p className="text-slate-800 dark:text-white text-2xl md:text-4xl font-black text-center leading-snug drop-shadow-sm">
+                {renderQuestionText(rightTeam.q?.text || "")}
+              </p>
+            </div>
+            <div style={{ flexGrow: 1, transition: 'flex-grow 0.3s ease-out' }} className="w-full shrink"></div>
+            
             {rightTeam.stunned && (
-              <div className="absolute inset-0 bg-red-600/60 backdrop-blur-sm flex items-center justify-center animate-pulse">
+              <div className="absolute inset-0 bg-red-600/60 backdrop-blur-sm flex items-center justify-center animate-pulse z-20">
                 <span className="text-slate-800 dark:text-white font-black italic text-3xl drop-shadow-lg">MISS!</span>
               </div>
             )}
