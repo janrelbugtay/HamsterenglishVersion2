@@ -110,6 +110,24 @@ export const GameThumbnail = ({ gameType, info }: { gameType: string, info: any 
     );
   }
 
+  if (gameType === 'squid-game-picker') {
+    return (
+      <div className="absolute inset-0 w-full h-full flex flex-col bg-white">
+        <div className="flex-1 relative overflow-hidden">
+           <img src={info.icon} referrerPolicy="no-referrer" alt={info.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        </div>
+        <div className="h-10 bg-rose-50 flex items-center px-2 gap-2 relative z-20 border-t-2 border-white">
+           <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 border-rose-300 shadow-sm absolute -top-4 left-2">
+             <span className="text-rose-500 text-sm">🎯</span>
+           </div>
+           <span className="font-black text-[10px] text-slate-800 tracking-wider ml-9 uppercase">
+             {info.title}:
+           </span>
+        </div>
+      </div>
+    );
+  }
+
   // Fallback to Image or Generic Icon
   if (info.icon && (info.icon.startsWith("http") || info.icon.startsWith("/"))) {
     return <img src={info.icon} referrerPolicy="no-referrer" alt={info.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />;

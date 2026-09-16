@@ -28,6 +28,140 @@ const DEFAULT_STUDENTS = [
   { id: 8, name: 'Michael', active: true },
 ];
 
+
+const AVATAR_COLORS = [
+  '#ea580c', '#2563eb', '#16a34a', '#d97706', '#9333ea', 
+  '#db2777', '#0891b2', '#dc2626', '#4f46e5', '#0d9488',
+  '#ca8a04', '#65a30d', '#2dd4bf', '#0284c7', '#4f46e5'
+];
+
+
+const Gradients = () => (
+  <svg width="0" height="0" className="absolute">
+    <defs>
+      <linearGradient id="volShine" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor="white" stopOpacity="0.7"/>
+        <stop offset="25%" stopColor="white" stopOpacity="0.2"/>
+        <stop offset="75%" stopColor="black" stopOpacity="0.1"/>
+        <stop offset="100%" stopColor="black" stopOpacity="0.7"/>
+      </linearGradient>
+      <linearGradient id="volEdge" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stopColor="white" stopOpacity="0.4"/>
+        <stop offset="100%" stopColor="black" stopOpacity="0.4"/>
+      </linearGradient>
+      <filter id="drop-shadow-3d">
+        <feDropShadow dx="2" dy="4" stdDeviation="2" floodOpacity="0.5" />
+      </filter>
+    </defs>
+  </svg>
+);
+
+const HorseAvatar = ({ color }: { color: string }) => (
+  <svg width="100%" height="100%" viewBox="0 0 100 100" style={{ color }} className="overflow-visible">
+    <defs>
+      <g id="horse-base">
+        <rect x="55" y="60" width="8" height="20" opacity="0.6"/>
+        <rect x="15" y="60" width="8" height="20" opacity="0.6"/>
+        <rect x="65" y="20" width="15" height="25" opacity="0.85"/>
+        <rect x="20" y="35" width="60" height="25" opacity="1"/>
+        <rect x="65" y="60" width="8" height="20" opacity="0.9"/>
+        <rect x="25" y="60" width="8" height="20" opacity="0.9"/>
+        <rect x="75" y="10" width="12" height="15" opacity="0.9"/>
+        <rect x="87" y="15" width="10" height="10" opacity="0.8"/>
+        <rect x="76" y="5" width="3" height="5" />
+        <rect x="82" y="5" width="3" height="5" />
+      </g>
+      <g id="horse-details">
+        <rect x="60" y="15" width="8" height="25" fill="#431407" />
+        <rect x="10" y="40" width="10" height="25" fill="#431407" />
+        <rect x="54" y="80" width="10" height="15" fill="#f8fafc" opacity="0.9"/>
+        <rect x="14" y="80" width="10" height="15" fill="#f8fafc" opacity="0.9"/>
+        <rect x="64" y="80" width="10" height="15" fill="#f8fafc" />
+        <rect x="24" y="80" width="10" height="15" fill="#f8fafc" />
+        <rect x="55" y="95" width="8" height="5" fill="#292524" opacity="0.8"/>
+        <rect x="15" y="95" width="8" height="5" fill="#292524" opacity="0.8"/>
+        <rect x="65" y="95" width="8" height="5" fill="#292524" />
+        <rect x="25" y="95" width="8" height="5" fill="#292524" />
+        <rect x="80" y="13" width="2" height="2" fill="#000" />
+        <rect x="87" y="20" width="10" height="2" fill="#1c1917" />
+        <rect x="85" y="15" width="2" height="10" fill="#1c1917" />
+      </g>
+    </defs>
+    
+    <g filter="url(#drop-shadow-3d)">
+      <use href="#horse-base" fill="currentColor" />
+      <use href="#horse-base" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+      <use href="#horse-base" fill="url(#volEdge)" style={{ mixBlendMode: 'multiply' }} opacity="0.3" />
+      <use href="#horse-details" />
+      <use href="#horse-details" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+    </g>
+  </svg>
+);
+
+const RobotAvatar = ({ color }: { color: string }) => (
+  <svg width="100%" height="100%" viewBox="0 0 100 100" style={{ color }} className="overflow-visible">
+    <defs>
+      <g id="robot-base">
+        <rect x="35" y="15" width="30" height="25" rx="4" />
+        <rect x="30" y="45" width="40" height="35" opacity="0.9" rx="6" />
+        <rect x="20" y="50" width="10" height="25" opacity="0.7" rx="3" />
+        <rect x="70" y="50" width="10" height="25" opacity="0.7" rx="3" />
+      </g>
+      <g id="robot-details">
+        <rect x="42" y="22" width="6" height="6" fill="#fde047" />
+        <rect x="52" y="22" width="6" height="6" fill="#fde047" />
+        <rect x="48" y="5" width="4" height="10" fill="#94a3b8" />
+        <circle cx="50" cy="5" r="3" fill="#ef4444" />
+        <rect x="40" y="80" width="20" height="15" fill="#334155" rx="2" />
+        <rect x="35" y="50" width="30" height="2" fill="#0f172a" opacity="0.5" />
+        <rect x="35" y="55" width="30" height="2" fill="#0f172a" opacity="0.5" />
+        <rect x="35" y="60" width="30" height="2" fill="#0f172a" opacity="0.5" />
+      </g>
+    </defs>
+    
+    <g filter="url(#drop-shadow-3d)">
+      <use href="#robot-base" fill="currentColor" />
+      <use href="#robot-base" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+      <use href="#robot-base" fill="url(#volEdge)" style={{ mixBlendMode: 'multiply' }} opacity="0.3" />
+      <use href="#robot-details" />
+      <use href="#robot-details" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+    </g>
+  </svg>
+);
+
+const CarAvatar = ({ color }: { color: string }) => (
+  <svg width="100%" height="100%" viewBox="0 0 100 100" style={{ color }} className="overflow-visible">
+    <defs>
+      <g id="car-base">
+        <rect x="10" y="50" width="80" height="20" rx="4" />
+        <rect x="25" y="35" width="40" height="15" opacity="0.8" />
+        <rect x="10" y="40" width="10" height="5" />
+        <rect x="15" y="45" width="3" height="5" opacity="0.6"/>
+      </g>
+      <g id="car-details">
+        <rect x="30" y="40" width="12" height="10" fill="#e0f2fe" />
+        <rect x="45" y="40" width="15" height="10" fill="#e0f2fe" />
+        <circle cx="25" cy="70" r="10" fill="#1e293b" />
+        <circle cx="25" cy="70" r="4" fill="#cbd5e1" />
+        <circle cx="75" cy="70" r="10" fill="#1e293b" />
+        <circle cx="75" cy="70" r="4" fill="#cbd5e1" />
+        {/* Spoiler <!-- Spoiler & bumper accents --> bumper accents */}
+        <rect x="5" y="60" width="5" height="5" fill="#fcd34d" />
+        <rect x="85" y="60" width="5" height="5" fill="#ef4444" />
+        <rect x="75" y="52" width="10" height="2" fill="#0f172a" opacity="0.4" />
+      </g>
+    </defs>
+    
+    <g filter="url(#drop-shadow-3d)">
+      <use href="#car-base" fill="currentColor" />
+      <use href="#car-base" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+      <use href="#car-base" fill="url(#volEdge)" style={{ mixBlendMode: 'multiply' }} opacity="0.3" />
+      <use href="#car-details" />
+      <use href="#car-details" fill="url(#volShine)" style={{ mixBlendMode: 'overlay' }} />
+    </g>
+  </svg>
+);
+
 const COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#84cc16', 
   '#22c55e', '#06b6d4', '#3b82f6', '#6366f1', 
@@ -713,12 +847,14 @@ const RaceEngine = ({ students, theme, onWin, onRemove, onBack }: any) => {
   const raceInterval = useRef<any>(null);
 
   const getAvatar = (index: number) => {
-    const cars = ['🏎️', '🚗', '🚙', '🚕', '🚓'];
-    const horses = ['🐎', '🦄', '🐴'];
-    const robots = ['🤖', '👾', '👽', '💀'];
-    if (theme === 'horses') return horses[index % horses.length];
-    if (theme === 'robots') return robots[index % robots.length];
-    return cars[index % cars.length];
+    const color = AVATAR_COLORS[index % AVATAR_COLORS.length];
+    return (
+      <div className="w-16 h-16 relative flex items-center justify-center -ml-4 z-10 transition-transform hover:scale-110 duration-200">
+         {theme === 'horses' && <HorseAvatar color={color} />}
+         {theme === 'robots' && <RobotAvatar color={color} />}
+         {theme === 'cars' && <CarAvatar color={color} />}
+      </div>
+    );
   };
 
   const startRace = () => {
@@ -737,31 +873,35 @@ const RaceEngine = ({ students, theme, onWin, onRemove, onBack }: any) => {
     raceInterval.current = setInterval(() => {
       setPositions(prev => {
         const next = { ...prev };
-        let currentWinner = null;
-
         for (let i = 0; i < students.length; i++) {
           const s = students[i];
           // Add random progress between 0.1 and 1.5, scaled by their hidden speed stat
           const progress = (Math.random() * 1.5 + 0.1) * speeds[i];
           next[s.id] = Math.min((next[s.id] || 0) + progress, 100);
-          
-          if (next[s.id] >= finishLine && !currentWinner) {
-            currentWinner = s;
-          }
         }
-
-        if (currentWinner) {
-          clearInterval(raceInterval.current);
-          setIsRacing(false);
-          setWinner(currentWinner);
-          if (onWin) onWin(currentWinner);
-          window.dispatchEvent(new CustomEvent('student-race-win'));
-        }
-
         return next;
       });
     }, 50);
   };
+
+  useEffect(() => {
+    if (isRacing) {
+      let currentWinner = null;
+      for (let i = 0; i < students.length; i++) {
+        if (positions[students[i].id] >= finishLine) {
+          currentWinner = students[i];
+          break;
+        }
+      }
+      if (currentWinner) {
+        if (raceInterval.current) clearInterval(raceInterval.current);
+        setIsRacing(false);
+        setWinner(currentWinner);
+        if (onWin) onWin(currentWinner);
+        window.dispatchEvent(new CustomEvent('student-race-win'));
+      }
+    }
+  }, [positions, isRacing, students, onWin]);
 
   useEffect(() => {
     return () => {
@@ -797,7 +937,7 @@ const RaceEngine = ({ students, theme, onWin, onRemove, onBack }: any) => {
          {students.map((student: any, index: number) => {
            const pos = positions[student.id] || 0;
            return (
-             <div key={student.id} className="w-full flex items-center h-12 relative group z-10">
+             <div key={student.id} className="w-full flex items-center h-16 relative group z-10">
                {/* Track line */}
                <div className="absolute left-0 right-0 h-full border-b border-white/5 top-0 pointer-events-none"></div>
                

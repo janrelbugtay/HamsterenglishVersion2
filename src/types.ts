@@ -21,7 +21,8 @@ export type ViewState =
   | "letter-lock"
   | "tic-tac-toe"
   | "homework"
-  | "phonemic-master";
+  | "phonemic-master"
+  | "squid-game-picker";
 
 export interface Game {
   id: string;

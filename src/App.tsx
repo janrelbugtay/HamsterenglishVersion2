@@ -28,6 +28,7 @@ import { LetterLock } from "./views/LetterLock";
 import { TicTacToe } from "./views/TicTacToe";
 import { Homework } from "./views/Homework";
 import { PhonemicMaster } from "./views/PhonemicMaster";
+import SquidGamePicker from "./views/SquidGamePicker";
 import { useAuth } from "./contexts/AuthContext";
 import { doc, onSnapshot, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
@@ -65,7 +66,7 @@ export default function App() {
     const gameViews = [
       "mystery-box", "neon-chain", "bubble-pop", "flashcards-match", "yoga-quiz", 
       "bubble-sentence-pro", "family-feud", "sumo", "hamster-pop-quiz", "student-race", 
-      "letter-lock", "tic-tac-toe", "phonemic-master"
+      "letter-lock", "tic-tac-toe", "phonemic-master", "squid-game-picker"
     ];
     
     if (gameViews.includes(view)) {
@@ -114,7 +115,7 @@ export default function App() {
   }, []);
 
   const renderView = () => {
-    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo", "tic-tac-toe", "homework"];
+    const publicViews = ["home", "public-dashboard", "mystery-box", "bubble-pop", "neon-chain", "hamster-pop-quiz", "student-race", "letter-lock", "yoga-quiz", "bubble-sentence-pro", "family-feud", "sumo", "tic-tac-toe", "squid-game-picker", "homework"];
     if ((!user || user.isAnonymous) && !publicViews.includes(currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full min-h-[60vh] p-4">
@@ -180,6 +181,8 @@ export default function App() {
         return <HamsterPopQuiz onViewChange={handleViewChange} initialGame={selectedGame} />;
       case "student-race":
         return <StudentRace onViewChange={handleViewChange} />;
+      case "squid-game-picker":
+        return <SquidGamePicker />;
       case "letter-lock":
         return <LetterLock />;
       case "tic-tac-toe":

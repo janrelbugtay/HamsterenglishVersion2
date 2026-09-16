@@ -114,7 +114,7 @@ const SumoCharacter = ({ team, isPushing, isStunned, isFrozen, hasLost, position
 
   return (
     <div 
-      className={`absolute bottom-4 z-10 w-56 h-72 md:w-[448px] md:h-[512px] transition-all duration-200 ease-out origin-bottom ${className || ''}`}
+      className={`absolute bottom-4 z-10 w-[28vh] h-[35vh] md:w-[33vh] md:h-[40vh] lg:w-[42vh] lg:h-[50vh] max-w-[224px] max-h-[288px] md:max-w-[320px] md:max-h-[400px] lg:max-w-[448px] lg:max-h-[512px] transition-all duration-200 ease-out origin-bottom ${className || ''}`}
       style={{ ...positionStyle, transform }}
     >
       <svg viewBox="0 0 100 120" className="w-full h-full drop-shadow-2xl overflow-visible">
@@ -681,12 +681,15 @@ export function Sumo({ onViewChange, initialGame }: { onViewChange: (view: ViewS
         </div>
   
         {/* Arena */}
-        <div className="flex-1 bg-[#fefae0] rounded-3xl md:rounded-[3rem] relative overflow-hidden border-4 md:border-8 border-amber-900/20 shadow-inner min-h-[150px] mt-16 md:mt-0">
-          {/* Ring */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95%] md:w-[110%] aspect-square flex items-center justify-center">
+        <div className="flex-1 bg-[#fefae0] rounded-3xl md:rounded-[3rem] relative border-4 md:border-8 border-amber-900/20 shadow-inner min-h-[150px] mt-16 md:mt-0">
+          {/* Ring Container for clipping */}
+          <div className="absolute inset-0 overflow-hidden rounded-3xl md:rounded-[3rem]">
+            {/* Ring */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95%] md:w-[110%] aspect-square flex items-center justify-center">
             <div className="w-full h-full bg-[#bc6c25] rounded-full border-[10px] md:border-[30px] border-[#8b5e34] shadow-2xl transform scale-y-[0.6] relative">
                <div className="h-full w-1 bg-white/20 absolute left-1/2 -translate-x-1/2"></div>
             </div>
+          </div>
           </div>
   
           <div className="absolute top-1/2 w-0 h-0 transition-all duration-300 ease-out flex justify-center items-end"
