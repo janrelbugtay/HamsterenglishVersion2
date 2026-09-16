@@ -138,20 +138,32 @@ export const GamesLibrary = ({
 
   const confirmDeleteFolder = async (folderId: string) => {
     try {
+      const folderToDeleteObj = folders.find(f => f.id === folderId);
+      const parentId = folderToDeleteObj?.parentId || null;
+
       await deleteDoc(doc(db, "gameFolders", folderId));
       
       const batch = writeBatch(db);
       const gamesToUpdate = games.filter(g => g.folderId === folderId);
       gamesToUpdate.forEach(game => {
         const gameRef = doc(db, "mysteryBoxGames", game.id);
-        batch.update(gameRef, { folderId: null });
+        batch.update(gameRef, { folderId: parentId });
       });
+
+      const foldersToUpdate = folders.filter(f => f.parentId === folderId);
+      foldersToUpdate.forEach(f => {
+        const folderRef = doc(db, "gameFolders", f.id);
+        batch.update(folderRef, { parentId });
+      });
+
       await batch.commit();
 
-      setFolders(folders.filter(f => f.id !== folderId));
-      setGames(games.map(g => g.folderId === folderId ? { ...g, folderId: null } : g));
+      setFolders(folders.map(f => f.parentId === folderId ? { ...f, parentId } : f).filter(f => f.id !== folderId));
+      setGames(games.map(g => g.folderId === folderId ? { ...g, folderId: parentId } : g));
       setFolderToDelete(null);
-      setSelectedFolderId(null);
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(parentId);
+      }
     } catch (error) {
       console.error("Error deleting folder:", error);
       alert("Failed to delete folder");
@@ -164,6 +176,7 @@ export const GamesLibrary = ({
       const newFolder = {
         name: newFolderName,
         userId: user!.uid,
+        parentId: selectedFolderId || null,
         createdAt: new Date().toISOString()
       };
       const docRef = await addDoc(collection(db, "gameFolders"), newFolder);
@@ -176,16 +189,38 @@ export const GamesLibrary = ({
     }
   };
 
-  const handleMoveGame = async (folderId: string | null) => {
-    if (!gameToMove) return;
+  const handleMoveGame = async (folderId: string | null, dragGameId?: string) => {
+    const targetGameId = dragGameId || gameToMove;
+    if (!targetGameId) return;
     try {
-       const gameRef = doc(db, "mysteryBoxGames", gameToMove);
+       const gameRef = doc(db, "mysteryBoxGames", targetGameId);
        await updateDoc(gameRef, { folderId });
-       setGames(games.map(g => g.id === gameToMove ? { ...g, folderId } : g));
+       setGames(games.map(g => g.id === targetGameId ? { ...g, folderId } : g));
        setGameToMove(null);
     } catch (error) {
        console.error("Error moving game:", error);
        alert("Failed to move game");
+    }
+  };
+
+  const handleMoveFolder = async (targetFolderId: string | null, dragFolderId: string) => {
+    if (targetFolderId === dragFolderId) return;
+    
+    // Prevent cyclical movement (moving a folder into its own subfolder)
+    let current = targetFolderId;
+    while (current) {
+        if (current === dragFolderId) return; // Cycle detected
+        const parent = folders.find(f => f.id === current);
+        current = parent?.parentId || null;
+    }
+
+    try {
+       const folderRef = doc(db, "gameFolders", dragFolderId);
+       await updateDoc(folderRef, { parentId: targetFolderId });
+       setFolders(folders.map(f => f.id === dragFolderId ? { ...f, parentId: targetFolderId } : f));
+    } catch (error) {
+       console.error("Error moving folder:", error);
+       alert("Failed to move folder");
     }
   };
 
@@ -240,15 +275,49 @@ export const GamesLibrary = ({
 
   const filteredGames = baseFilteredGames.filter(g => isAdmin || publishedGames[g.gameType || "mystery-box"] !== false);
 
+  const getFolderTree = (parentId: string | null = null, depth = 0): {folder: any, depth: number}[] => {
+    const children = folders.filter(f => (f.parentId || null) === parentId);
+    let result: {folder: any, depth: number}[] = [];
+    for (const child of children) {
+      result.push({folder: child, depth});
+      result = result.concat(getFolderTree(child.id, depth + 1));
+    }
+    return result;
+  };
+  const folderTree = getFolderTree();
+
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 flex flex-col gap-8">
       {/* Main Content */}
       <div className="flex-1">
-        <div className="flex justify-between items-center mb-8 bg-white dark:bg-slate-800 p-6 rounded-[24px] shadow-sm border-2 border-slate-100 dark:border-slate-700 flex-wrap gap-4">
+        <div 
+          className="flex justify-between items-center mb-8 bg-white dark:bg-slate-800 p-6 rounded-[24px] shadow-sm border-2 border-slate-100 dark:border-slate-700 flex-wrap gap-4"
+          onDragOver={(e) => {
+            if (!selectedFolderId) return; // Only accept drops if we are inside a folder
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(e) => {
+            if (!selectedFolderId) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const currentFolder = folders.find(f => f.id === selectedFolderId);
+            const parentId = currentFolder?.parentId || null;
+
+            const gameId = e.dataTransfer.getData('text/plain');
+            if (gameId) handleMoveGame(parentId, gameId);
+
+            const draggedFolderId = e.dataTransfer.getData('application/x-folder-id');
+            if (draggedFolderId) handleMoveFolder(parentId, draggedFolderId);
+          }}
+        >
           <div className="flex items-center gap-4">
             {selectedFolderId && (
               <button 
-                onClick={() => setSelectedFolderId(null)}
+                onClick={() => {
+                  const currentFolder = folders.find(f => f.id === selectedFolderId);
+                  setSelectedFolderId(currentFolder?.parentId || null);
+                }}
                 className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0"
               >
                 <X className="w-6 h-6 text-slate-600 dark:text-slate-400" />
@@ -267,24 +336,13 @@ export const GamesLibrary = ({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {!selectedFolderId && (
-              <button
-                onClick={() => setShowNewFolderModal(true)}
-                className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition"
-              >
-                <FolderPlus className="w-5 h-5" />
-                <span className="hidden sm:inline">New Folder</span>
-              </button>
-            )}
-            {selectedFolderId && (
-              <button
-                onClick={() => setFolderToDelete(selectedFolderId)}
-                className="flex items-center gap-2 px-5 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition"
-              >
-                <Trash2 className="w-5 h-5" />
-                <span className="hidden sm:inline">Delete Folder</span>
-              </button>
-            )}
+            <button
+              onClick={() => setShowNewFolderModal(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition"
+            >
+              <FolderPlus className="w-5 h-5" />
+              <span className="hidden sm:inline">New Folder</span>
+            </button>
             <button
               onClick={() => setShowNewGameModal(true)}
               className="flex items-center gap-2 px-5 py-3 bg-brand-purple text-white font-bold rounded-xl shadow-[0_4px_0_#4c1d95] active:translate-y-[4px] active:shadow-none hover:bg-purple-700 transition"
@@ -296,10 +354,31 @@ export const GamesLibrary = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {!selectedFolderId && folders.map((folder) => (
+          {folders.filter(f => (f.parentId || null) === (selectedFolderId || null)).map((folder) => (
             <div
               key={folder.id}
               onClick={() => setSelectedFolderId(folder.id)}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/x-folder-id', folder.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const gameId = e.dataTransfer.getData('text/plain');
+                if (gameId) {
+                  handleMoveGame(folder.id, gameId);
+                }
+                const draggedFolderId = e.dataTransfer.getData('application/x-folder-id');
+                if (draggedFolderId) {
+                  handleMoveFolder(folder.id, draggedFolderId);
+                }
+              }}
               className="group bg-white dark:bg-slate-800 rounded-[24px] p-6 shadow-sm hover:shadow-xl transition-all duration-300 border-2 border-slate-100 dark:border-slate-700 cursor-pointer flex flex-col justify-between"
             >
               <div className="flex justify-between items-start mb-4">
@@ -338,6 +417,11 @@ export const GamesLibrary = ({
           {filteredGames.map((game) => (
             <div
               key={game.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', game.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
               className={`group bg-white dark:bg-slate-800 rounded-[24px] shadow-sm hover:shadow-xl transition-all duration-300 border-2 border-slate-100 dark:border-slate-700 flex flex-col relative ${openMenuId === game.id ? 'z-50' : 'z-10'}`}
             >
               <div className="p-5 flex flex-col h-full relative z-10 bg-white dark:bg-slate-800 rounded-[24px]">
@@ -410,13 +494,14 @@ export const GamesLibrary = ({
                                     <Gamepad2 className="w-4 h-4 text-slate-400" />
                                     All Games
                                  </button>
-                                 {folders.map(f => (
+                                 {folderTree.map(({folder: f, depth}) => (
                                     <button
                                        key={f.id}
                                        onClick={(e) => { e.stopPropagation(); handleMoveGame(f.id); setOpenMenuId(null); }}
-                                       className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900/50 text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2 border-t border-slate-100 dark:border-slate-700"
+                                       className="w-full text-left py-3 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900/50 text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2 border-t border-slate-100 dark:border-slate-700"
+                                       style={{ paddingLeft: `${1 + depth * 1.5}rem`, paddingRight: '1rem' }}
                                     >
-                                       <Folder className="w-4 h-4 text-slate-400" />
+                                       <Folder className="w-4 h-4 text-slate-400 shrink-0" />
                                        <span className="truncate">{f.name}</span>
                                     </button>
                                  ))}
