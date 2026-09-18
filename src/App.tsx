@@ -69,22 +69,6 @@ export default function App() {
       "letter-lock", "tic-tac-toe", "phonemic-master", "squid-game-picker"
     ];
     
-    if (gameViews.includes(view)) {
-      try {
-        if (!document.fullscreenElement) {
-          if (document.documentElement.requestFullscreen) {
-            const promise = document.documentElement.requestFullscreen();
-            if (promise && promise.catch) {
-              promise.catch(err => {
-                console.warn("Fullscreen request failed (promise rejected):", err);
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Fullscreen request failed (sync throw):", err);
-      }
-    }
 
     setCurrentView(view);
     if (data) {

@@ -153,9 +153,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signInWithGoogle = async () => {
-    if (user?.isAnonymous) {
-      return linkWithGoogle();
-    }
 
     if (isAuthenticatingRef.current) {
       console.log('Authentication is already in progress.');
@@ -167,7 +164,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setAuthError(null);
 
     try {
-      await signInWithPopup(auth, googleProvider);
+      googleProvider.setCustomParameters({ prompt: "select_account" }); await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
       if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
         console.log('User closed Google Sign-In popup or request was cancelled.');
