@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState } from "../types";
 import { FullscreenButton } from "../components/FullscreenButton";
 import { MediaPickerModal } from "../components/MediaPickerModal";
+import { BulkPasteVideoModal } from "../components/BulkPasteVideoModal";
 import { ArrowLeft, Edit3, Trash2, Heart, Plus, Sparkles, BookOpen, Search, Save, X, Play, Folder, Image as ImageIcon, ClipboardList, Info, Settings, Copy, Flag, Volume2, VolumeX } from "lucide-react";
 import { collection, query, where, getDocs, deleteDoc, doc, addDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -327,6 +328,7 @@ export function BubblePop({ onViewChange, initialGame }: { onViewChange: (view: 
         isActive: true,
         numPlayers: players,
         scores: [0, 0],
+        frozenTeams: [false, false],
         currentQuestionIndex: 0,
         combo: 0,
         maxCombo: 0,
@@ -1730,6 +1732,7 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
 
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showBulkPasteModal, setShowBulkPasteModal] = useState(false);
+  const [showVideoGuide, setShowVideoGuide] = useState(false);
   const [bulkText, setBulkText] = useState("");
   const [toastMsg, setToastMsg] = useState("");
 
@@ -1980,89 +1983,33 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
           </div>
         )}
 
-        {/* Bulk Paste Modal */}
-        {showBulkPasteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl flex flex-col gap-5 transform scale-100 animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center font-bold">
-                    <ClipboardList size={22} />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">
-                      Bulk Paste & Auto-Divide
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Paste multiple questions, numbered lists, or tabular TSV data.
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => { setShowBulkPasteModal(false); setBulkText(""); }}
-                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center cursor-pointer"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Paste Text Below (Supports multi-line Q&A format or Excel copy)
-                </label>
-                <textarea 
-                  rows={6}
-                  value={bulkText}
-                  onChange={(e) => setBulkText(e.target.value)}
-                  placeholder={"Example:\n1. What is the capital of France?\na) London\nb) Paris\nc) Berlin\nd) Madrid\n\nOr paste tabular data directly from Excel!"}
-                  className="w-full text-sm font-medium bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-white p-4 rounded-2xl focus:border-cyan-500 transition-colors custom-scrollbar"
-                />
-              </div>
-
-              {bulkText.trim() && (
-                <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div className="text-cyan-500 mt-0.5"><Info size={16} /></div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">
-                    Found <span className="font-bold text-slate-800 dark:text-white">{parsePastedQuiz(bulkText).length}</span> items. 
-                  </p>
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button 
-                  onClick={() => handleApplyBulkPaste('replace')}
-                  className="flex-1 py-3 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                >
-                  Replace All
-                </button>
-                <button 
-                  onClick={() => handleApplyBulkPaste('append')}
-                  className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30"
-                >
-                  Append to End
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="p-6 flex flex-col gap-6 bg-slate-100 dark:bg-slate-900/50">
-          {/* Smart Tip Bar */}
-          <div className="bg-blue-500/10 dark:bg-blue-950/30 border border-blue-500/20 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-blue-900 dark:text-blue-200">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 font-bold">
-                <Info size={18} />
-              </div>
-              <p className="text-xs sm:text-sm font-medium">
-                <span className="font-bold">Smart Paste:</span> Paste multiple lines, numbered Q&As, or Excel rows directly into any box below — they will automatically populate!
-              </p>
+          {/* Bulk Paste Action Bar */}
+          <div className="bg-blue-500/10 dark:bg-blue-950/30 border border-blue-500/20 rounded-2xl px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <span className="font-bold text-sm text-blue-900 dark:text-blue-200 uppercase tracking-wider">
+              Questions ({questions.length})
+            </span>
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={() => setShowVideoGuide(true)}
+                className="px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer active:scale-95 group"
+                title="Watch video explanation on how to bulk paste"
+              >
+                <div className="w-6 h-6 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors">
+                  <Play size={12} className="ml-0.5 fill-current" />
+                </div>
+                <span>Video Explanation</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBulkPasteModal(true)}
+                className="px-5 py-2.5 bg-blue-500 hover:bg-blue-600 active:scale-95 text-white rounded-xl text-sm sm:text-base font-bold transition-all shadow-md shadow-blue-500/25 flex items-center gap-2.5 cursor-pointer"
+              >
+                <ClipboardList size={22} className="stroke-[2.5]" />
+                <span>Bulk Paste</span>
+              </button>
             </div>
-            <button
-              onClick={() => setShowBulkPasteModal(true)}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer self-end sm:self-auto"
-            >
-              <ClipboardList size={14} /> Bulk Paste Modal
-            </button>
           </div>
           {questions.map((q, index) => (
             <div key={q.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-300 dark:border-slate-700 shadow-sm relative group">
@@ -2191,6 +2138,95 @@ function QuizEditor({ quiz, onSave, onCancel, folders }: { quiz: Quiz, onSave: (
           </div>
         </div>
       )}
+
+      {/* Bulk Paste Modal */}
+      {showBulkPasteModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl flex flex-col gap-5 transform scale-100 animate-in fade-in zoom-in duration-200 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto custom-scrollbar"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-500 flex items-center justify-center font-bold">
+                  <ClipboardList size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-2xl font-black text-slate-800 dark:text-white">
+                      Bulk Paste & Auto-Divide
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowVideoGuide(true)}
+                      className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-900"
+                      title="Watch video explanation"
+                    >
+                      <Play size={10} className="fill-current" /> Video Guide
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Paste multiple questions, numbered lists, or tabular TSV data.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => { setShowBulkPasteModal(false); setBulkText(""); }}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Paste Text Below (Supports multi-line Q&A format or Excel copy)
+              </label>
+              <textarea 
+                rows={6}
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder={"Example:\n1. What is the capital of France?\na) London\nb) Paris\nc) Berlin\nd) Madrid\n\nOr paste tabular data directly from Excel!"}
+                className="w-full text-sm font-medium bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none text-slate-800 dark:text-white p-4 rounded-2xl focus:border-cyan-500 transition-colors custom-scrollbar"
+              />
+            </div>
+
+            {bulkText.trim() && (
+              <div className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="text-cyan-500 mt-0.5"><Info size={16} /></div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Found <span className="font-bold text-slate-800 dark:text-white">{parsePastedQuiz(bulkText).length}</span> items. 
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button 
+                onClick={() => handleApplyBulkPaste('replace')}
+                className="flex-1 py-3 rounded-xl font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              >
+                Replace All
+              </button>
+              <button 
+                onClick={() => handleApplyBulkPaste('append')}
+                className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors shadow-lg shadow-blue-500/30"
+              >
+                Append to End
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Paste Video Explanation Modal */}
+      <BulkPasteVideoModal
+        isOpen={showVideoGuide}
+        onClose={() => setShowVideoGuide(false)}
+        onOpenBulkPasteWithSample={(sample) => {
+          setBulkText(sample);
+          setShowBulkPasteModal(true);
+        }}
+      />
     </div>
   );
 }

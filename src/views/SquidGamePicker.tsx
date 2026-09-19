@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import {
     Users, Play, Check, MousePointerClick, Skull, UserRound, VolumeX,
-    Volume2, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList
+    Volume2, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList,
+    Maximize, Minimize
 } from 'lucide-react';
 
 const generateSeed = (str: string) => {
@@ -138,6 +139,7 @@ const announce = (text: string) => {
 
     if (voices.length === 0) {
         window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.onvoiceschanged = null;
             speak();
         };
     } else {
@@ -502,11 +504,34 @@ class ThreeManager {
         });
         const matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
 
+        const headGroup = new THREE.Group();
+        headGroup.position.y = 2.6;
         const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), matSkin);
-        head.position.y = 2.6; head.castShadow = true; group.add(head);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
+        eyeL.position.set(-0.25, 0.1, -0.61);
+        const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
+        eyeR.position.set(0.25, 0.1, -0.61);
+        headGroup.add(eyeL, eyeR);
+
+        const noseTone = skinTone.clone().multiplyScalar(0.9);
+        const noseMat = new THREE.MeshStandardMaterial({ color: noseTone, roughness: 0.8 });
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.15), noseMat);
+        nose.position.set(0, -0.1, -0.62);
+        headGroup.add(nose);
+
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x221111 });
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.1), mouthMat);
+        mouth.position.set(0, -0.3, -0.61);
+        headGroup.add(mouth);
+
+        group.add(headGroup);
 
         const torso = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.8), [
-            matUniform, matUniform, matUniform, matUniform, matTorso, matUniform
+            matUniform, matUniform, matUniform, matUniform, matUniform, matTorso
         ]);
         torso.position.y = 1.2; torso.castShadow = true; group.add(torso);
 
@@ -615,8 +640,8 @@ class ThreeManager {
             const panelGeo = new THREE.BoxGeometry(5, 8, 1.2);
             const doorColor = new THREE.Color().setHSL(i/numDoors, 0.8, 0.5);
             const panelMat = new THREE.MeshStandardMaterial({ color: doorColor, emissive: doorColor, emissiveIntensity: 0.2 });
-            const panel = new THREE.Mesh(panelGeo, panelMat);
-            panel.position.z = 0.1;
+            panelGeo.translate(2.5, 0, 0); const panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.set(-2.5, 0, 0.1);
             
             const shapeType = this.shapes[i % this.shapes.length];
             const matWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -657,7 +682,7 @@ class ThreeManager {
                 doorShape.add(dome); doorShape.add(stick); doorShape.add(hook);
                 doorShape.scale.set(0.8, 0.8, 0.8);
             }
-            doorShape.position.set(0, 1, 0.65);
+            doorShape.position.set(2.5, 1, 0.65);
             panel.add(doorShape);
 
             doorGroup.add(panel);
@@ -800,7 +825,7 @@ class ThreeManager {
         globalAudio.play('pop', 300);
         
         this.doors.forEach(d => {
-            gsap.to(d.panel.position, { y: 9, duration: 0.8, ease: "power2.inOut" }); 
+            gsap.to(d.panel.rotation, { y: Math.PI / 1.8, duration: 0.8, ease: "power2.inOut" }); 
         });
         await new Promise(r => setTimeout(r, 1000));
         
@@ -926,7 +951,7 @@ class ThreeManager {
         isRunning = false; // stop footstep loop
         
         globalAudio.play('pop', 200);
-        this.doors.forEach(d => { gsap.to(d.panel.position, { y: 0, duration: 0.5 }); });
+        this.doors.forEach(d => { gsap.to(d.panel.rotation, { y: 0, duration: 0.5 }); });
         await new Promise(r => setTimeout(r, 1000));
 
         this.onStateChange({ phase: 'EVALUATING', msg: 'EVALUATING...' });
@@ -975,7 +1000,7 @@ class ThreeManager {
 
         globalAudio.play('pop', 400);
         this.doors.forEach((d, idx) => {
-            gsap.to(d.panel.position, { y: 9, duration: 0.8, ease: "power2.out" }); 
+            gsap.to(d.panel.rotation, { y: Math.PI / 1.8, duration: 0.8, ease: "power2.out" }); 
             if (roundData.trapDoors && roundData.trapDoors.includes(idx)) {
                 d.panel.material.color.setHex(0xff0000); d.panel.material.emissive.setHex(0x550000);
             } else if (roundData.safeDoors && roundData.safeDoors.includes(idx)) {
@@ -1262,24 +1287,67 @@ export default function SquidGamePicker() {
     }, [gameState.eliminatedThisRound]);
 
     useEffect(() => {
+        const timeouts: (ReturnType<typeof setTimeout>)[] = [];
         if (gameState.phase === 'WINNER' && gameMode === 'picker') {
             chosenOnes.forEach((name, idx) => {
-                setTimeout(() => {
+                timeouts.push(setTimeout(() => {
                     const pNum = students.indexOf(name) + 1;
                     announce(`Player ${pNum}, eliminated.`);
-                }, idx * 1500);
+                }, idx * 1500));
             });
         } else if (gameState.phase === 'ELIMINATED' && gameMode === 'survival') {
             if (gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0) {
                 gameState.eliminatedThisRound.forEach((name: string, idx: number) => {
-                    setTimeout(() => {
+                    timeouts.push(setTimeout(() => {
                         const pNum = students.indexOf(name) + 1;
                         announce(`Player ${pNum}, eliminated.`);
-                    }, idx * 1500);
+                    }, idx * 1500));
                 });
             }
         }
+        return () => timeouts.forEach(clearTimeout);
     }, [gameState.phase, chosenOnes, gameMode, students, gameState.eliminatedThisRound]);
+
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 100);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        };
+    }, []);
+
+    const toggleFullscreen = async () => {
+        try {
+            if (!document.fullscreenElement) {
+                const elem = document.getElementById('squid-picker-root') || document.documentElement;
+                if (elem.requestFullscreen) {
+                    await elem.requestFullscreen();
+                } else if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+            }
+        } catch (err) {
+            console.error("Error attempting to toggle fullscreen:", err);
+            try {
+                if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+            } catch (e) {
+                console.error("Fallback fullscreen error:", e);
+            }
+        }
+    };
 
     const toggleMute = () => {
         if (globalAudio) {
@@ -1453,10 +1521,17 @@ export default function SquidGamePicker() {
                 </div>
                 
                 <div className="flex gap-3 pointer-events-auto">
-                     <button onClick={toggleMute} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg">
+                    <button 
+                        onClick={toggleFullscreen} 
+                        className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
+                        title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                    >
+                        {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
+                    </button>
+                    <button onClick={toggleMute} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg" title={muteUI ? "Unmute Sound" : "Mute Sound"}>
                         {muteUI ? <VolumeX className="text-red-500" /> : <Volume2 className="text-emerald-400" />}
                     </button>
-                    <button onClick={resetGame} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-rose-600 hover:border-rose-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg">
+                    <button onClick={resetGame} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-rose-600 hover:border-rose-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg" title="Reset Game">
                         <Power />
                     </button>
                 </div>
@@ -1493,7 +1568,7 @@ export default function SquidGamePicker() {
 
             {gameState.phase === 'WINNER' && (
                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full text-center pointer-events-auto">
-                    <div className="inline-block bg-slate-900/95 border-4 border-rose-600 px-20 py-12 rounded-[2rem] shadow-[0_0_100px_rgba(244,63,94,0.6)] relative overflow-hidden min-w-[600px] transition-transform animate-bounce">
+                    <div className="inline-block bg-slate-900/95 border-4 border-rose-600 px-20 py-12 rounded-[2rem] shadow-[0_0_100px_rgba(244,63,94,0.6)] relative overflow-hidden min-w-[600px] transition-transform animate-fade-in">
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-rose-900/30 to-transparent"></div>
                         
                         <div className="text-rose-500 text-6xl mb-4 relative z-10 flex justify-center">
@@ -1505,20 +1580,41 @@ export default function SquidGamePicker() {
                         </h2>
                         
                         <div className="flex flex-col gap-6 mb-10 relative z-10">
-                            {chosenOnes.map((name, i) => (
-                                <div key={i} className="bg-black/50 p-6 rounded-2xl border border-slate-700">
-                                    <div className="text-xl text-rose-300 font-bold mb-2 tracking-widest uppercase">
-                                        PLAYER #{(students.indexOf(name) + 1).toString()}
+                            {chosenOnes.map((name, i) => {
+                                const playerNum = (students.indexOf(name) + 1).toString();
+                                                                                                const canvas = document.createElement('canvas');
+                                canvas.width = 256; canvas.height = 256;
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                    ctx.fillStyle = '#2d6a4f';
+                                    ctx.fillRect(0, 0, 256, 256);
+                                    ctx.fillStyle = '#ffffff';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.font = 'bold 120px "Fredoka", sans-serif';
+                                    ctx.fillText(playerNum, 128, 128);
+                                }
+                                const playerImage = canvas.toDataURL();
+                                return (
+                                    <div key={i} className="flex items-center gap-6 bg-black/50 p-6 rounded-2xl border border-slate-700">
+                                        <div className={`w-24 h-24 shrink-0 rounded-xl bg-slate-800 border-2 overflow-hidden flex items-center justify-center ${gameMode === "picker" ? "border-rose-500" : "border-emerald-500"}`}>
+                                            <img src={playerImage} alt="Player Avatar" className="w-full h-full object-cover" />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <div className="text-xl text-rose-300 font-bold mb-2 tracking-widest uppercase">
+                                                PLAYER #{playerNum}
+                                            </div>
+                                            <div className="text-4xl sm:text-5xl text-white font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 uppercase" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                                {name}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="text-5xl text-white font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 uppercase" style={{fontFamily: "'Fredoka', sans-serif"}}>
-                                        {name}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         
-                        <Button size="lg" variant={gameMode === 'picker' ? 'primary' : 'success'} onClick={continueGame} className="mx-auto relative z-10 w-full shadow-[0_0_30px_rgba(16,185,129,0.5)]">
-                                    <RotateCcw className="w-6 h-6 mr-2" /> 'CONTINUE'
+                        <Button size="lg" variant={gameMode === 'picker' ? 'primary' : 'success'} onClick={continueGame} className="mx-auto relative z-10 w-full shadow-[0_0_30px_rgba(16,185,129,0.5)] uppercase tracking-widest text-xl h-16 rounded-2xl font-black">
+                            <RotateCcw className="w-6 h-6 mr-3" /> CONTINUE
                         </Button>
                     </div>
                 </div>
@@ -1527,7 +1623,7 @@ export default function SquidGamePicker() {
     );
 
     return (
-        <div className="w-full h-full bg-[#0f172a] text-slate-100 flex relative overflow-hidden">
+        <div id="squid-picker-root" className="w-full h-full bg-[#0f172a] text-slate-100 flex relative overflow-hidden">
             {/* Absolute positioning for the Three.js canvas so it stays under the UI layer and takes full space */}
             <div id="canvas-container" className="absolute inset-0 z-10" />
             <iframe id="yt-player" className="hidden" src="https://www.youtube.com/embed/SbAKYgfYET8?enablejsapi=1&autoplay=0" allow="autoplay" title="YouTube video player" frameBorder="0"></iframe>
@@ -1551,6 +1647,10 @@ export default function SquidGamePicker() {
                             <button onClick={() => setView('students')} className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'students' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}>
                                 <ClipboardList className="w-6 h-6 text-center" /> Player Roster
                             </button>
+                            <button onClick={toggleFullscreen} className="flex items-center gap-4 p-4 rounded-xl transition font-medium hover:bg-slate-800 text-slate-400 hover:text-white">
+                                {isFullscreen ? <Minimize className="w-6 h-6 text-emerald-400" /> : <Maximize className="w-6 h-6 text-center" />}
+                                <span>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</span>
+                            </button>
                         </nav>
                         
                         <div className="p-6 border-t border-slate-800 text-xs text-slate-600 text-center uppercase tracking-widest font-bold flex flex-col gap-1">
@@ -1563,6 +1663,24 @@ export default function SquidGamePicker() {
                 )}
 
                 <div className="flex-1 relative">
+                    {(view === 'home' || view === 'students') && (
+                        <div className="absolute top-6 right-6 z-40 flex items-center gap-3 pointer-events-auto">
+                            <button
+                                onClick={toggleFullscreen}
+                                className="w-12 h-12 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
+                                title={isFullscreen ? "Exit Fullscreen" : "Full Screen"}
+                            >
+                                {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
+                            </button>
+                            <button
+                                onClick={toggleMute}
+                                className="w-12 h-12 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
+                                title={muteUI ? "Unmute Sound" : "Mute Sound"}
+                            >
+                                {muteUI ? <VolumeX className="w-5 h-5 text-red-500" /> : <Volume2 className="w-5 h-5 text-emerald-400" />}
+                            </button>
+                        </div>
+                    )}
                     {view === 'home' && renderHome()}
                     {view === 'students' && <StudentManager students={students} setStudents={setStudents} onBack={() => setView('home')} />}
                     {view === 'game' && renderGameUI()}
