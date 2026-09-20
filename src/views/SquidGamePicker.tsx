@@ -2812,6 +2812,7 @@ class ThreeManager {
         // Evasion loop: players run avoiding IT, strictly staying inside the circle!
         let evasionActive = true;
         const circleMaxRadius = 22.5;
+        let currentTargetVictim: string | null = null;
 
         const evasionLoop = () => {
             if (!evasionActive) return;
@@ -2829,7 +2830,21 @@ class ThreeManager {
 
                 const perpDir = new THREE.Vector2(-awayDir.y, awayDir.x);
                 const dodgeOffset = Math.sin(Date.now() * 0.005 + idx * 2.2) * 0.35;
-                const moveVec = awayDir.clone().multiplyScalar(0.24).add(perpDir.clone().multiplyScalar(dodgeOffset));
+
+                // If this player is the target victim, they run hard then fatigue / get cornered
+                let moveSpeed = 0.24;
+                if (name === currentTargetVictim) {
+                    const dToIt = c.position.distanceTo(itPos);
+                    if (dToIt < 3.2) {
+                        moveSpeed = 0.06; // trapped / out of breath
+                    } else if (dToIt < 7.5) {
+                        moveSpeed = 0.13; // stumbling
+                    } else {
+                        moveSpeed = 0.21; // fleeing
+                    }
+                }
+
+                const moveVec = awayDir.clone().multiplyScalar(moveSpeed).add(perpDir.clone().multiplyScalar(dodgeOffset * (moveSpeed / 0.24)));
 
                 let newX = c.position.x + moveVec.x;
                 let newZ = c.position.z + moveVec.y;
@@ -2850,6 +2865,57 @@ class ThreeManager {
         };
         requestAnimationFrame(evasionLoop);
 
+        // Visual touch spark effect helper
+        const createTouchImpactSpark = (x: number, z: number) => {
+            if (!this.scene) return;
+            const sparkGroup = new THREE.Group();
+            sparkGroup.position.set(x, 1.25, z);
+
+            const ringGeo = new THREE.RingGeometry(0.12, 0.52, 20);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xff1e56,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 1
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            if (this.camera) ring.lookAt(this.camera.position);
+            sparkGroup.add(ring);
+
+            const innerGeo = new THREE.RingGeometry(0.04, 0.26, 16);
+            const innerMat = new THREE.MeshBasicMaterial({
+                color: 0xffe600,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 1
+            });
+            const innerRing = new THREE.Mesh(innerGeo, innerMat);
+            innerRing.position.z = 0.02;
+            sparkGroup.add(innerRing);
+
+            this.scene.add(sparkGroup);
+
+            gsap.to(sparkGroup.scale, {
+                x: 3.5,
+                y: 3.5,
+                z: 3.5,
+                duration: 0.35,
+                ease: "power2.out"
+            });
+            gsap.to([ringMat, innerMat], {
+                opacity: 0,
+                duration: 0.35,
+                ease: "power2.out",
+                onComplete: () => {
+                    if (this.scene) this.scene.remove(sparkGroup);
+                    ringGeo.dispose();
+                    ringMat.dispose();
+                    innerGeo.dispose();
+                    innerMat.dispose();
+                }
+            });
+        };
+
         // IT catches designated target(s)
         let targetsToCatch: string[] = roundData.eliminated.filter((name: string) => name !== itName);
         if (targetsToCatch.length === 0 && others.length > 0) {
@@ -2863,11 +2929,13 @@ class ThreeManager {
 
             if (!victimChar || !itChar) continue;
 
+            currentTargetVictim = victimName;
             itChar.userData.isMoving = true;
 
             await new Promise<void>((resolveCatch) => {
                 const chaseStart = Date.now();
-                let hasTriggeredCloseUp = false;
+                // Camera stages: 'high' -> 'close' -> 'very_close'
+                let camStage: 'high' | 'close' | 'very_close' = 'high';
 
                 const chaseInterval = setInterval(() => {
                     if (!itChar || !victimChar) {
@@ -2883,111 +2951,183 @@ class ThreeManager {
                     const dx = targetX - itChar.position.x;
                     const dz = targetZ - itChar.position.z;
                     const dist = Math.sqrt(dx * dx + dz * dz);
+                    const normDx = dx / (dist || 1);
+                    const normDz = dz / (dist || 1);
+                    const perpX = -normDz;
+                    const perpZ = normDx;
 
                     itChar.lookAt(targetX, 1, targetZ);
 
-                    // Camera close-up swoop when about to be caught!
-                    if (dist < 6.5 && !hasTriggeredCloseUp) {
-                        hasTriggeredCloseUp = true;
+                    const chaseElapsed = Date.now() - chaseStart;
+
+                    // CAMERA ANGLE VARIATION:
+                    // 1) HIGH: Initially set at round start
+                    // 2) CLOSE: Dynamic over-the-shoulder chase tracking angle
+                    if (camStage === 'high' && (dist < 11.5 || chaseElapsed > 850) && dist > 2.6) {
+                        camStage = 'close';
                         if (this.camera) {
-                            const normDx = dx / dist;
-                            const normDz = dz / dist;
-                            const closeCamX = victimChar.position.x - normDz * 4.2 - normDx * 1.5;
-                            const closeCamZ = victimChar.position.z + normDx * 4.2 - normDz * 1.5;
-                            const closeCamY = 2.4;
+                            const closeCamX = targetX - normDx * 5.8 + perpX * 3.6;
+                            const closeCamZ = targetZ - normDz * 5.8 + perpZ * 3.6;
+                            const closeCamY = 5.4;
                             gsap.killTweensOf(this.camera.position);
                             gsap.to(this.camera.position, {
                                 x: closeCamX,
                                 y: closeCamY,
                                 z: closeCamZ,
-                                duration: 0.65,
+                                duration: 0.75,
                                 ease: "power2.out",
                                 onUpdate: () => {
-                                    this.camera?.lookAt(victimChar.position.x, 1.3, victimChar.position.z);
+                                    this.camera?.lookAt(targetX, 1.3, targetZ);
+                                }
+                            });
+                        }
+                    } else if (camStage === 'close' && dist > 2.6 && this.camera) {
+                        // Smoothly track while in CLOSE mode
+                        const desiredX = targetX - normDx * 5.8 + perpX * 3.6;
+                        const desiredZ = targetZ - normDz * 5.8 + perpZ * 3.6;
+                        this.camera.position.x += (desiredX - this.camera.position.x) * 0.12;
+                        this.camera.position.z += (desiredZ - this.camera.position.z) * 0.12;
+                        this.camera.position.y += (5.4 - this.camera.position.y) * 0.12;
+                        this.camera.lookAt(targetX, 1.3, targetZ);
+                    }
+
+                    // 3) VERY CLOSE: Low eye-level dramatic action angle framing the physical touch
+                    if (dist <= 2.6 && camStage !== 'very_close') {
+                        camStage = 'very_close';
+                        if (this.camera) {
+                            const veryCloseCamX = targetX - perpX * 2.7 - normDx * 1.3;
+                            const veryCloseCamZ = targetZ - perpZ * 2.7 - normDz * 1.3;
+                            const veryCloseCamY = 1.95;
+                            gsap.killTweensOf(this.camera.position);
+                            gsap.to(this.camera.position, {
+                                x: veryCloseCamX,
+                                y: veryCloseCamY,
+                                z: veryCloseCamZ,
+                                duration: 0.45,
+                                ease: "power2.out",
+                                onUpdate: () => {
+                                    this.camera?.lookAt(targetX, 1.25, targetZ);
                                 }
                             });
                         }
                     }
 
-                    // IT reaches arms forward to touch/catch the player
-                    if (dist < 3.2 && dist > 1.35) {
+                    // Guard reaches arms forward to touch the player
+                    if (dist < 3.2) {
                         if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
                             itChar.userData.isCustomArmAnim = true;
                             gsap.to(itChar.userData.parts.armR.rotation, {
-                                x: -Math.PI * 0.72,
-                                z: -0.22,
-                                duration: 0.18,
+                                x: -Math.PI * 0.58,
+                                z: -0.15,
+                                duration: 0.15,
                                 overwrite: "auto"
                             });
                             gsap.to(itChar.userData.parts.armL.rotation, {
-                                x: -Math.PI * 0.70,
-                                z: 0.22,
-                                duration: 0.18,
+                                x: -Math.PI * 0.52,
+                                z: 0.15,
+                                duration: 0.15,
                                 overwrite: "auto"
                             });
                         }
                         if (itChar.userData.parts?.torso) {
                             gsap.to(itChar.userData.parts.torso.rotation, {
                                 x: 0.32,
-                                duration: 0.18,
+                                duration: 0.15,
                                 overwrite: "auto"
                             });
                         }
                     }
 
-                    const speed = 0.52;
-                    if (dist > 1.35 && Date.now() - chaseStart < 4500) {
-                        itChar.position.x += (dx / dist) * speed;
-                        itChar.position.z += (dz / dist) * speed;
+                    // Guard movement speed: accelerates into sprint and lunge
+                    let stepSpeed = 0.44;
+                    if (dist < 2.5) {
+                        stepSpeed = 0.48; // lunge
+                    } else if (chaseElapsed > 2600) {
+                        stepSpeed = 0.58; // sprint burst to guarantee swift catch
+                    }
+
+                    // IT MUST TOUCH THE PLAYER: keep closing until physical contact dist <= 0.95!
+                    if (dist > 0.95) {
+                        itChar.position.x += normDx * stepSpeed;
+                        itChar.position.z += normDz * stepSpeed;
                     } else {
-                        // Contact! TOUCH / CATCH!
+                        // PHYSICAL TOUCH & CATCH!
                         clearInterval(chaseInterval);
 
-                        // Physical hand tap/touch impact
+                        // Physical forward hand touch jab directly touching the victim's back
                         if (itChar.userData.parts?.armR) {
                             gsap.to(itChar.userData.parts.armR.position, {
-                                z: 0.35,
-                                duration: 0.1,
+                                z: 0.4,
+                                duration: 0.08,
                                 yoyo: true,
                                 repeat: 1
                             });
                         }
 
+                        // Touch impact spark effect
+                        createTouchImpactSpark(targetX, targetZ);
+
+                        // Impact audio
+                        globalAudio?.play('pop', 500);
                         globalAudio?.play('boom', 420);
-                        globalAudio?.play('pop', 350);
+
+                        // Camera impact vibration
+                        if (this.camera) {
+                            gsap.to(this.camera.position, {
+                                x: "+=0.18",
+                                y: "+=0.12",
+                                duration: 0.04,
+                                yoyo: true,
+                                repeat: 3
+                            });
+                        }
 
                         victimChar.userData.isAlive = false;
                         victimChar.userData.wasTagged = true;
                         victimChar.userData.isMoving = false;
 
-                        // Victim physical reaction to being touched: arms fly up in shock
-                        if (victimChar.userData.parts) {
-                            victimChar.userData.isCustomArmAnim = true;
-                            gsap.to(victimChar.userData.parts.armL.rotation, { x: -Math.PI * 0.85, z: -0.25, duration: 0.2 });
-                            gsap.to(victimChar.userData.parts.armR.rotation, { x: -Math.PI * 0.85, z: 0.25, duration: 0.2 });
-                        }
-
-                        // Victim stumbles forward from touch impact
+                        // Victim physical reaction to being touched:
+                        // Torso jolts forward from impact
                         gsap.to(victimChar.position, {
-                            x: victimChar.position.x + (dx / dist) * 0.75,
-                            z: victimChar.position.z + (dz / dist) * 0.75,
-                            duration: 0.25,
+                            x: victimChar.position.x + normDx * 0.72,
+                            z: victimChar.position.z + normDz * 0.72,
+                            duration: 0.22,
                             ease: "power1.out"
                         });
 
+                        // Arms throw up in shock, head tilts back
+                        if (victimChar.userData.parts) {
+                            victimChar.userData.isCustomArmAnim = true;
+                            gsap.to(victimChar.userData.parts.armL.rotation, { x: -Math.PI * 0.88, z: -0.28, duration: 0.18 });
+                            gsap.to(victimChar.userData.parts.armR.rotation, { x: -Math.PI * 0.88, z: 0.28, duration: 0.18 });
+                            if (victimChar.userData.parts.head) {
+                                gsap.to(victimChar.userData.parts.head.rotation, { x: -0.32, duration: 0.18 });
+                            }
+                        }
+
                         // Victim sits down on turf
                         gsap.to(victimChar.position, {
-                            y: 0.4,
+                            y: 0.38,
                             duration: 0.4,
-                            delay: 0.15,
+                            delay: 0.14,
                             ease: "bounce.out"
                         });
                         gsap.to(victimChar.rotation, {
                             z: Math.PI / 2.2,
-                            y: victimChar.rotation.y + 0.4,
+                            y: victimChar.rotation.y + 0.35,
                             duration: 0.4,
-                            delay: 0.15
+                            delay: 0.14
                         });
+
+                        // Squid Guard stops right behind the player, standing tall and looking down
+                        itChar.userData.isMoving = false;
+                        if (itChar.userData.parts?.torso) {
+                            gsap.to(itChar.userData.parts.torso.rotation, { x: 0.08, duration: 0.3 });
+                        }
+                        if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
+                            gsap.to(itChar.userData.parts.armR.rotation, { x: -0.18, z: 0, duration: 0.3 });
+                            gsap.to(itChar.userData.parts.armL.rotation, { x: -0.18, z: 0, duration: 0.3 });
+                        }
 
                         const vLabel = this.labels[victimName];
                         if (vLabel) {
@@ -3000,25 +3140,23 @@ class ThreeManager {
                         this.lastCaughtPlayer = victimName;
                         this.tagRoundCount++;
 
+                        const itTaggedName = isFirstGame ? 'SQUID GUARD' : `#${itNum} ${itName}`;
                         this.onStateChange({
                             phase: 'ELIMINATED',
-                            msg: `#${victimNum} ${victimName} WAS CAUGHT!`,
+                            msg: `${itTaggedName} TAGGED #${victimNum} ${victimName}!`,
                             eliminatedThisRound: targetsToCatch.slice(0, tIdx + 1)
                         });
 
-                        // Hold close camera framing for 1.1s so user enjoys the dramatic catch
+                        // Hold the VERY CLOSE camera angle for 1.4s so the touch and elimination is celebrated
                         setTimeout(() => {
-                            // Smoothly restore wide arena framing
+                            // Smoothly glide back up to HIGH arena framing
                             this.updateCameraFraming(false);
-                            if (itChar.userData.parts?.torso) {
-                                gsap.to(itChar.userData.parts.torso.rotation, { x: 0, duration: 0.4 });
-                            }
                             itChar.userData.isCustomArmAnim = false;
                             victimChar.userData.isCustomArmAnim = false;
                             resolveCatch();
-                        }, 1100);
+                        }, 1400);
                     }
-                }, 30);
+                }, 25);
             });
         }
 
@@ -3055,9 +3193,10 @@ class ThreeManager {
 
         await new Promise(r => setTimeout(r, 2200));
 
+        const escCount = roundData.survivors.length;
         this.onStateChange({
             phase: 'IDLE',
-            msg: `${roundData.survivors.length} PLAYERS ESCAPED!`,
+            msg: escCount === 1 ? '1 PLAYER ESCAPED!' : `${escCount} PLAYERS ESCAPED!`,
             eliminatedThisRound: roundData.eliminated
         });
 
