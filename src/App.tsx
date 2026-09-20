@@ -63,13 +63,6 @@ export default function App() {
       return;
     }
 
-    const gameViews = [
-      "mystery-box", "neon-chain", "bubble-pop", "flashcards-match", "yoga-quiz", 
-      "bubble-sentence-pro", "family-feud", "sumo", "hamster-pop-quiz", "student-race", 
-      "letter-lock", "tic-tac-toe", "phonemic-master", "squid-game-picker"
-    ];
-    
-
     setCurrentView(view);
     if (data) {
       setSelectedGame(data);
@@ -166,7 +159,7 @@ export default function App() {
       case "student-race":
         return <StudentRace onViewChange={handleViewChange} />;
       case "squid-game-picker":
-        return <SquidGamePicker />;
+        return <SquidGamePicker onViewChange={handleViewChange} />;
       case "letter-lock":
         return <LetterLock />;
       case "tic-tac-toe":

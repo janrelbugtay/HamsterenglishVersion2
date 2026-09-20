@@ -29,7 +29,7 @@ export const GamesLibrary = ({
   const [gameToMove, setGameToMove] = useState<string | null>(null);
   
   const allGameTemplates = [
-    { id: "squid-game-picker", title: "NAME PICKER", icon: "https://drive.google.com/thumbnail?id=1mDD25-FfKbMt7WA_P1HHQ3qCjp9VmOMP&sz=w1000", color: "bg-rose-100 text-rose-600" },
+    { id: "squid-game-picker", title: "NAME PICKER", icon: "/images/name-picker-card.png", color: "bg-rose-100 text-rose-600" },
     { id: "neon-chain", title: "Neon Chain", icon: "https://drive.google.com/thumbnail?id=1kovfYZSlp6X8HTqQ9OF_gSpf3wgJgNYG&sz=w1000", color: "bg-cyan-100 text-cyan-600" },
     { id: "mystery-box", title: "Mystery Box", icon: "https://drive.google.com/thumbnail?id=1ugM0rhtk40XdbSDrdDJja5QpLNkWebQn&sz=w1000", color: "bg-orange-100 text-orange-600" },
     

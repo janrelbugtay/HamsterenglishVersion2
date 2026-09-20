@@ -111,20 +111,14 @@ export const GameThumbnail = ({ gameType, info }: { gameType: string, info: any 
   }
 
   if (gameType === 'squid-game-picker') {
+    const src = info.imageUrl || info.icon || '/images/name-picker-card.png';
     return (
-      <div className="absolute inset-0 w-full h-full flex flex-col bg-white">
-        <div className="flex-1 relative overflow-hidden">
-           <img src={info.icon} referrerPolicy="no-referrer" alt={info.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        </div>
-        <div className="h-16 bg-rose-50 flex items-center px-3 gap-2 relative z-20 border-t-4 border-white">
-           <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center border-2 border-rose-300 shadow-sm absolute -top-6 left-3">
-             <span className="text-rose-500 text-2xl">🎯</span>
-           </div>
-           <span className="font-black text-sm text-slate-800 tracking-wider ml-14 uppercase">
-             {info.title}
-           </span>
-        </div>
-      </div>
+      <img
+        src={src}
+        referrerPolicy="no-referrer"
+        alt={info.title}
+        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+      />
     );
   }
 

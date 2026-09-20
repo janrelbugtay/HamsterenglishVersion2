@@ -79,7 +79,7 @@ function FeaturedGamesSection({
       time: "5m",
       subject: "Classroom Management",
       grade: "All",
-      imageUrl: "https://drive.google.com/thumbnail?id=1mDD25-FfKbMt7WA_P1HHQ3qCjp9VmOMP&sz=w1000",
+      imageUrl: "/images/name-picker-card.png",
       isAI: false,
       color: "from-rose-600 to-rose-400",
       icon: "🎯",
@@ -313,18 +313,7 @@ function GameCard({
       onClick={() => onViewChange && onViewChange(game.id as ViewState)}
       className="w-full relative aspect-[1000/791] bg-white dark:bg-slate-800 border-[6px] border-white rounded-[40px] overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.08)] group hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(0,0,0,0.12)] ring-1 ring-slate-100 transition-all duration-300 cursor-pointer"
     >
-      {game.id === 'squid-game-picker' ? (
-        <>
-          <div className="w-full h-full scale-[1.12] group-hover:scale-[1.20] transition-transform duration-700 pointer-events-none">
-             <GameThumbnail gameType={game.id} info={{...game, icon: game.imageUrl}} />
-          </div>
-          <div className="absolute inset-0 bg-brand-purple/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-30">
-            <div className="w-16 h-16 bg-white dark:bg-slate-800/90 backdrop-blur-sm rounded-full flex items-center justify-center text-brand-purple shadow-lg transform scale-50 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 delay-75">
-              <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-            </div>
-          </div>
-        </>
-      ) : game.imageUrl ? (
+      {game.imageUrl ? (
         <>
           <img
             src={game.imageUrl}

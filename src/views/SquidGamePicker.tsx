@@ -4,8 +4,9 @@ import gsap from 'gsap';
 import {
     Users, Play, Check, MousePointerClick, Skull, UserRound, VolumeX,
     Volume2, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList,
-    Maximize, Minimize
+    Maximize, Minimize, ArrowLeft, Tag
 } from 'lucide-react';
+import { ViewState } from '../types';
 
 const generateSeed = (str: string) => {
     let hash = 0;
@@ -25,6 +26,356 @@ const getSavedRoster = () => {
     }
     return Array.from({ length: 30 }, (_, i) => `Player ${i + 1}`);
 };
+
+export const getPlayerNumber = (name: string): string => {
+    if (!name) return '001';
+    const match = name.match(/\d+/);
+    if (match) {
+        return match[0];
+    }
+    const seed = generateSeed(name);
+    return ((Math.abs(seed) % 456) + 1).toString();
+};
+
+class SeededRNG {
+    s: number;
+    constructor(seed: number) {
+        this.s = Math.abs(seed) || 12345;
+    }
+    next(): number {
+        this.s = (this.s * 9301 + 49297) % 233280;
+        return this.s / 233280;
+    }
+    range(min: number, max: number): number {
+        return min + this.next() * (max - min);
+    }
+    int(min: number, max: number): number {
+        return Math.floor(this.range(min, max + 1));
+    }
+    choice<T>(arr: T[]): T {
+        return arr[this.int(0, arr.length - 1)];
+    }
+    chance(prob: number): boolean {
+        return this.next() < prob;
+    }
+}
+
+const SKIN_PALETTES = [
+    { skin: '#ffd9c7', shadow: '#e5baa3', lip: '#cf6874', blush: 'rgba(244, 63, 94, 0.25)' },
+    { skin: '#f8d2b2', shadow: '#dbae8b', lip: '#c55c65', blush: 'rgba(239, 68, 68, 0.22)' },
+    { skin: '#f5c197', shadow: '#d1986e', lip: '#b8525b', blush: 'rgba(225, 29, 72, 0.24)' },
+    { skin: '#e9b585', shadow: '#c48b59', lip: '#a64a51', blush: 'rgba(225, 29, 72, 0.22)' },
+    { skin: '#dea16c', shadow: '#b2743f', lip: '#8f3e40', blush: 'rgba(190, 24, 93, 0.20)' },
+    { skin: '#c6824c', shadow: '#9a5722', lip: '#7b3133', blush: 'rgba(159, 18, 57, 0.20)' },
+    { skin: '#a56333', shadow: '#773e13', lip: '#662728', blush: 'rgba(136, 19, 55, 0.18)' },
+    { skin: '#7d451e', shadow: '#532808', lip: '#4d1c1d', blush: 'rgba(112, 26, 44, 0.18)' },
+    { skin: '#542d13', shadow: '#351906', lip: '#3a1516', blush: 'rgba(90, 20, 35, 0.16)' },
+    { skin: '#3a1e0c', shadow: '#200f04', lip: '#260e0f', blush: 'rgba(70, 15, 25, 0.16)' }
+];
+
+const HAIR_PALETTES = [
+    { color: 0x18181b, hex: '#18181b', name: 'Jet Black' },
+    { color: 0x271c19, hex: '#271c19', name: 'Dark Espresso' },
+    { color: 0x3d2314, hex: '#3d2314', name: 'Chestnut Brown' },
+    { color: 0x5c3217, hex: '#5c3217', name: 'Caramel Auburn' },
+    { color: 0x8a4b18, hex: '#8a4b18', name: 'Copper Auburn' },
+    { color: 0xb87d3b, hex: '#b87d3b', name: 'Golden Blonde' },
+    { color: 0xe2b874, hex: '#e2b874', name: 'Platinum Blonde' },
+    { color: 0x71717a, hex: '#71717a', name: 'Silver Ash' },
+    { color: 0x581c87, hex: '#581c87', name: 'Deep Purple' },
+    { color: 0x0e7490, hex: '#0e7490', name: 'Teal Blue' }
+];
+
+function buildHairMesh(hairStyle: number, matHair: THREE.Material, matAccent: THREE.Material, rng: SeededRNG): THREE.Group {
+    const hairGroup = new THREE.Group();
+
+    if (hairStyle === 0) {
+        // Messy Anime Spikes
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.35, 1.24), matHair);
+        cap.position.set(0, 0.52, -0.02);
+        hairGroup.add(cap);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.6, 0.2), matHair);
+        back.position.set(0, 0.2, -0.58);
+        hairGroup.add(back);
+
+        const spikeGeo = new THREE.ConeGeometry(0.18, 0.45, 4);
+        spikeGeo.rotateX(Math.PI / 2);
+        const spikes = [
+            { pos: [0, 0.72, 0.1], rot: [-0.3, 0, 0], scale: 1.2 },
+            { pos: [-0.3, 0.7, 0.15], rot: [-0.35, 0, 0.25], scale: 1.0 },
+            { pos: [0.3, 0.7, 0.15], rot: [-0.35, 0, -0.25], scale: 1.0 },
+            { pos: [-0.45, 0.62, 0.35], rot: [-0.5, 0, 0.4], scale: 0.9 },
+            { pos: [0.45, 0.62, 0.35], rot: [-0.5, 0, -0.4], scale: 0.9 },
+            { pos: [0, 0.62, 0.48], rot: [-0.7, 0, 0], scale: 1.1 },
+            { pos: [-0.22, 0.6, 0.46], rot: [-0.65, 0, 0.2], scale: 0.95 },
+            { pos: [0.22, 0.6, 0.46], rot: [-0.65, 0, -0.2], scale: 0.95 },
+            { pos: [0, 0.65, -0.3], rot: [0.3, 0, 0], scale: 1.0 }
+        ];
+        spikes.forEach(s => {
+            const m = new THREE.Mesh(spikeGeo, matHair);
+            m.position.set(s.pos[0], s.pos[1], s.pos[2]);
+            m.rotation.set(s.rot[0], s.rot[1], s.rot[2]);
+            m.scale.setScalar(s.scale);
+            hairGroup.add(m);
+        });
+    } else if (hairStyle === 1) {
+        // Classic Side-Part Undercut / K-Drama
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.32, 1.24), matHair);
+        top.position.set(0, 0.58, -0.02);
+        hairGroup.add(top);
+
+        const sweep = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.22, 0.3), matHair);
+        sweep.position.set(0.18, 0.48, 0.55);
+        sweep.rotation.z = -0.12;
+        hairGroup.add(sweep);
+
+        const sbL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 0.25), matHair);
+        sbL.position.set(-0.62, 0.15, 0.2);
+        const sbR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 0.25), matHair);
+        sbR.position.set(0.62, 0.15, 0.2);
+        hairGroup.add(sbL, sbR);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.7, 0.18), matHair);
+        back.position.set(0, 0.15, -0.58);
+        hairGroup.add(back);
+    } else if (hairStyle === 2) {
+        // Sleek Bob with Straight Fringe / Bangs
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.3, 1.26), matHair);
+        top.position.set(0, 0.58, 0);
+        hairGroup.add(top);
+
+        const bangs = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.26, 0.16), matHair);
+        bangs.position.set(0, 0.42, 0.62);
+        hairGroup.add(bangs);
+
+        const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.85, 1.2), matHair);
+        sideL.position.set(-0.64, 0.1, 0.05);
+        const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.85, 1.2), matHair);
+        sideR.position.set(0.64, 0.1, 0.05);
+        hairGroup.add(sideL, sideR);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.85, 0.16), matHair);
+        back.position.set(0, 0.1, -0.64);
+        hairGroup.add(back);
+    } else if (hairStyle === 3) {
+        // Samurai Topknot / High Bun
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.28, 1.24), matHair);
+        top.position.set(0, 0.55, -0.02);
+        hairGroup.add(top);
+
+        const bun = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.32, 10), matHair);
+        bun.position.set(0, 0.82, -0.25);
+        bun.rotation.x = 0.2;
+        hairGroup.add(bun);
+
+        const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.08, 10), matAccent);
+        tie.position.set(0, 0.7, -0.23);
+        tie.rotation.x = 0.2;
+        hairGroup.add(tie);
+
+        const strandL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.12), matHair);
+        strandL.position.set(-0.54, 0.25, 0.6);
+        const strandR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.12), matHair);
+        strandR.position.set(0.54, 0.25, 0.6);
+        hairGroup.add(strandL, strandR);
+    } else if (hairStyle === 4) {
+        // Textured Fluffy Curls / Afro Volume
+        const curlGeo = new THREE.DodecahedronGeometry(0.26);
+        const curlPositions = [
+            [0, 0.72, 0], [-0.35, 0.7, 0], [0.35, 0.7, 0],
+            [0, 0.7, -0.35], [-0.32, 0.68, -0.32], [0.32, 0.68, -0.32],
+            [-0.55, 0.5, 0.1], [0.55, 0.5, 0.1],
+            [-0.55, 0.5, -0.25], [0.55, 0.5, -0.25],
+            [0, 0.65, 0.35], [-0.3, 0.62, 0.35], [0.3, 0.62, 0.35],
+            [0, 0.35, -0.58], [-0.35, 0.35, -0.56], [0.35, 0.35, -0.56]
+        ];
+        curlPositions.forEach(pos => {
+            const curl = new THREE.Mesh(curlGeo, matHair);
+            curl.position.set(pos[0], pos[1], pos[2]);
+            hairGroup.add(curl);
+        });
+    } else if (hairStyle === 5) {
+        // Athletic Headband + Spiky Tuft
+        const headband = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.16, 1.26), matAccent);
+        headband.position.set(0, 0.38, 0);
+        hairGroup.add(headband);
+
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.27, 0.04, 1.27), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+        stripe.position.set(0, 0.38, 0);
+        hairGroup.add(stripe);
+
+        const spikeGeo = new THREE.ConeGeometry(0.2, 0.5, 4);
+        spikeGeo.rotateX(Math.PI / 2);
+        const tufts = [
+            [0, 0.68, 0.05, -0.2, 0, 0],
+            [-0.28, 0.65, 0.1, -0.25, 0, 0.25],
+            [0.28, 0.65, 0.1, -0.25, 0, -0.25],
+            [0, 0.62, 0.3, -0.4, 0, 0],
+            [-0.2, 0.6, 0.3, -0.4, 0, 0.15],
+            [0.2, 0.6, 0.3, -0.4, 0, -0.15],
+            [0, 0.6, -0.25, 0.2, 0, 0],
+        ];
+        tufts.forEach(t => {
+            const m = new THREE.Mesh(spikeGeo, matHair);
+            m.position.set(t[0], t[1], t[2]);
+            m.rotation.set(t[3], t[4], t[5]);
+            hairGroup.add(m);
+        });
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.5, 0.16), matHair);
+        back.position.set(0, 0.2, -0.58);
+        hairGroup.add(back);
+    } else if (hairStyle === 6) {
+        // Squid Game Green Baseball Cap (Forwards)
+        const matCap = new THREE.MeshStandardMaterial({ color: 0x1b4d3e, roughness: 0.8 });
+        const capDome = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.35, 1.26), matCap);
+        capDome.position.set(0, 0.55, 0);
+        hairGroup.add(capDome);
+
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.06, 0.52), matCap);
+        visor.position.set(0, 0.44, 0.78);
+        visor.rotation.x = -0.1;
+        hairGroup.add(visor);
+
+        const button = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.05, 8), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+        button.position.set(0, 0.74, 0);
+        hairGroup.add(button);
+
+        const hairBack = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.45, 0.18), matHair);
+        hairBack.position.set(0, 0.15, -0.58);
+        const sbL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.25), matHair);
+        sbL.position.set(-0.62, 0.18, 0.2);
+        const sbR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.25), matHair);
+        sbR.position.set(0.62, 0.18, 0.2);
+        hairGroup.add(hairBack, sbL, sbR);
+    } else if (hairStyle === 7) {
+        // Squid Game Green Baseball Cap (Backwards)
+        const matCap = new THREE.MeshStandardMaterial({ color: 0x1b4d3e, roughness: 0.8 });
+        const capDome = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.35, 1.26), matCap);
+        capDome.position.set(0, 0.55, 0);
+        hairGroup.add(capDome);
+
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.06, 0.5), matCap);
+        visor.position.set(0, 0.44, -0.78);
+        visor.rotation.x = 0.15;
+        hairGroup.add(visor);
+
+        const bangs = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.2, 0.2), matHair);
+        bangs.position.set(0, 0.36, 0.58);
+        hairGroup.add(bangs);
+
+        const sbL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.25), matHair);
+        sbL.position.set(-0.62, 0.18, 0.2);
+        const sbR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.25), matHair);
+        sbR.position.set(0.62, 0.18, 0.2);
+        hairGroup.add(sbL, sbR);
+    } else if (hairStyle === 8) {
+        // Two-Block Curtain Bangs (Modern K-Pop)
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.35, 1.24), matHair);
+        top.position.set(0, 0.58, -0.02);
+        hairGroup.add(top);
+
+        const bangL = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.35, 0.22), matHair);
+        bangL.position.set(-0.35, 0.38, 0.58);
+        bangL.rotation.z = -0.15;
+        const bangR = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.35, 0.22), matHair);
+        bangR.position.set(0.35, 0.38, 0.58);
+        bangR.rotation.z = 0.15;
+        hairGroup.add(bangL, bangR);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.65, 0.18), matHair);
+        back.position.set(0, 0.18, -0.58);
+        const sbL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 0.3), matHair);
+        sbL.position.set(-0.62, 0.15, 0.15);
+        const sbR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 0.3), matHair);
+        sbR.position.set(0.62, 0.15, 0.15);
+        hairGroup.add(back, sbL, sbR);
+    } else {
+        // Beanie Hat (Rolled Cuff)
+        const beanieColor = rng.choice([0x27272a, 0x991b1b, 0xd97706, 0x1e293b]);
+        const matBeanie = new THREE.MeshStandardMaterial({ color: beanieColor, roughness: 0.9 });
+        const dome = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.45, 1.26), matBeanie);
+        dome.position.set(0, 0.65, -0.02);
+        hairGroup.add(dome);
+
+        const cuff = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.2, 1.3), matBeanie);
+        cuff.position.set(0, 0.42, -0.02);
+        hairGroup.add(cuff);
+
+        const strand = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.18, 0.16), matHair);
+        strand.position.set(-0.1, 0.32, 0.6);
+        strand.rotation.z = -0.1;
+        hairGroup.add(strand);
+    }
+
+    hairGroup.traverse((c: any) => { if (c.isMesh) c.castShadow = true; });
+    return hairGroup;
+}
+
+function buildGlassesMesh(glassesType: number): THREE.Group {
+    const glassesGroup = new THREE.Group();
+    const matFrame = glassesType === 2 
+        ? new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2, metalness: 0.8 })
+        : (glassesType === 1 
+            ? new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 })
+            : new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.8, roughness: 0.3 }));
+
+    const frameZ = 0.65;
+    const frameY = 0.08;
+
+    if (glassesType === 0) {
+        // Round Wireframe Glasses
+        const rimGeo = new THREE.TorusGeometry(0.18, 0.025, 8, 16);
+        const rimL = new THREE.Mesh(rimGeo, matFrame);
+        rimL.position.set(-0.25, frameY, frameZ);
+        const rimR = new THREE.Mesh(rimGeo, matFrame);
+        rimR.position.set(0.25, frameY, frameZ);
+
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.02), matFrame);
+        bridge.position.set(0, frameY + 0.04, frameZ);
+
+        glassesGroup.add(rimL, rimR, bridge);
+    } else if (glassesType === 1) {
+        // Modern Rectangular Glasses
+        const rimL = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.28, 0.04), matFrame);
+        rimL.position.set(-0.25, frameY, frameZ);
+        const rimR = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.28, 0.04), matFrame);
+        rimR.position.set(0.25, frameY, frameZ);
+
+        const matLens = new THREE.MeshStandardMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.35, roughness: 0.1 });
+        const lensL = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.02), matLens);
+        lensL.position.set(-0.25, frameY, frameZ + 0.01);
+        const lensR = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 0.02), matLens);
+        lensR.position.set(0.25, frameY, frameZ + 0.01);
+
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.04), matFrame);
+        bridge.position.set(0, frameY + 0.05, frameZ);
+
+        glassesGroup.add(rimL, rimR, lensL, lensR, bridge);
+    } else {
+        // Cool Sunglasses
+        const shadeGeo = new THREE.BoxGeometry(0.42, 0.3, 0.05);
+        const matDarkLens = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.15, metalness: 0.5 });
+        const shadeL = new THREE.Mesh(shadeGeo, matDarkLens);
+        shadeL.position.set(-0.25, frameY, frameZ);
+        const shadeR = new THREE.Mesh(shadeGeo, matDarkLens);
+        shadeR.position.set(0.25, frameY, frameZ);
+
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 0.05), matDarkLens);
+        bridge.position.set(0, frameY + 0.08, frameZ);
+
+        glassesGroup.add(shadeL, shadeR, bridge);
+    }
+
+    const templeL = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.65), matFrame);
+    templeL.position.set(-0.62, frameY + 0.02, 0.32);
+    const templeR = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.65), matFrame);
+    templeR.position.set(0.62, frameY + 0.02, 0.32);
+    glassesGroup.add(templeL, templeR);
+
+    return glassesGroup;
+}
 
 
 
@@ -243,13 +594,227 @@ const GameEngine = {
     }
 };
 
+export function generateStaticPlayerAvatar(name: string, numberStr: string): string {
+    const seed = generateSeed(name);
+    const rng = new SeededRNG(seed);
+    const skinPalette = SKIN_PALETTES[rng.int(0, SKIN_PALETTES.length - 1)];
+    const hairPalette = HAIR_PALETTES[rng.int(0, HAIR_PALETTES.length - 1)];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 320;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    // Studio backdrop gradient
+    const bgGrad = ctx.createRadialGradient(160, 140, 20, 160, 160, 180);
+    bgGrad.addColorStop(0, '#1e293b');
+    bgGrad.addColorStop(1, '#090d16');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, 320, 320);
+
+    // Subtle Squid Game geometry symbol in background
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.15)';
+    ctx.lineWidth = 4;
+    const shapeType = rng.int(0, 2);
+    if (shapeType === 0) {
+        ctx.beginPath();
+        ctx.arc(160, 130, 80, 0, Math.PI * 2);
+        ctx.stroke();
+    } else if (shapeType === 1) {
+        ctx.beginPath();
+        ctx.moveTo(160, 50);
+        ctx.lineTo(235, 180);
+        ctx.lineTo(85, 180);
+        ctx.closePath();
+        ctx.stroke();
+    } else {
+        ctx.strokeRect(95, 65, 130, 130);
+    }
+
+    // Torso / Shoulders (Green Tracksuit)
+    ctx.fillStyle = '#1b4d3e';
+    ctx.beginPath();
+    ctx.moveTo(40, 320);
+    ctx.quadraticCurveTo(80, 230, 130, 220);
+    ctx.lineTo(190, 220);
+    ctx.quadraticCurveTo(240, 230, 280, 320);
+    ctx.closePath();
+    ctx.fill();
+
+    // White shoulder stripes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(60, 320);
+    ctx.quadraticCurveTo(85, 250, 110, 230);
+    ctx.lineTo(122, 235);
+    ctx.quadraticCurveTo(95, 260, 75, 320);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(260, 320);
+    ctx.quadraticCurveTo(235, 250, 210, 230);
+    ctx.lineTo(198, 235);
+    ctx.quadraticCurveTo(225, 260, 245, 320);
+    ctx.closePath();
+    ctx.fill();
+
+    // Neck Collar
+    ctx.fillStyle = '#153e32';
+    ctx.fillRect(135, 205, 50, 25);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(140, 207, 40, 4);
+
+    // Front Zipper
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(158, 225, 4, 95);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(155, 235, 10, 14);
+
+    // Left chest participant number badge
+    ctx.fillStyle = '#ffffff';
+    if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(85, 255, 56, 34, 6);
+        ctx.fill();
+    } else {
+        ctx.fillRect(85, 255, 56, 34);
+    }
+    ctx.fillStyle = '#1b4d3e';
+    ctx.font = 'bold 22px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(numberStr, 113, 272);
+
+    // Neck
+    ctx.fillStyle = skinPalette.shadow;
+    ctx.fillRect(142, 185, 36, 25);
+
+    // Head Base
+    ctx.fillStyle = skinPalette.skin;
+    if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(105, 80, 110, 115, 12);
+        ctx.fill();
+    } else {
+        ctx.fillRect(105, 80, 110, 115);
+    }
+
+    // 3D Nose
+    ctx.fillStyle = skinPalette.shadow;
+    ctx.fillRect(152, 136, 16, 14);
+
+    // Ears
+    ctx.fillStyle = skinPalette.skin;
+    ctx.fillRect(96, 120, 10, 26);
+    ctx.fillRect(214, 120, 10, 26);
+    ctx.fillStyle = skinPalette.shadow;
+    ctx.fillRect(99, 124, 6, 18);
+    ctx.fillRect(215, 124, 6, 18);
+
+    // Eyes
+    const eyeY = 124;
+    const eyeSpacing = 24;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(160 - eyeSpacing - 12, eyeY, 18, 14);
+    ctx.fillRect(160 + eyeSpacing - 6, eyeY, 18, 14);
+    ctx.fillStyle = hairPalette.hex;
+    ctx.fillRect(160 - eyeSpacing - 8, eyeY + 2, 12, 12);
+    ctx.fillRect(160 + eyeSpacing - 4, eyeY + 2, 12, 12);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(160 - eyeSpacing - 6, eyeY + 4, 8, 8);
+    ctx.fillRect(160 + eyeSpacing - 2, eyeY + 4, 8, 8);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(160 - eyeSpacing - 5, eyeY + 3, 3, 3);
+    ctx.fillRect(160 + eyeSpacing - 1, eyeY + 3, 3, 3);
+
+    // Eyebrows
+    ctx.fillStyle = hairPalette.hex;
+    ctx.fillRect(160 - eyeSpacing - 14, eyeY - 8, 22, 5);
+    ctx.fillRect(160 + eyeSpacing - 8, eyeY - 8, 22, 5);
+
+    // Mouth
+    ctx.fillStyle = skinPalette.lip;
+    ctx.fillRect(146, 166, 28, 6);
+
+    // Blush / Accents
+    ctx.fillStyle = skinPalette.blush;
+    ctx.beginPath();
+    ctx.arc(125, 148, 10, 0, Math.PI * 2);
+    ctx.arc(195, 148, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hair Style
+    const hairStyle = rng.int(0, 9);
+    ctx.fillStyle = hairPalette.hex;
+
+    if (hairStyle === 6) { // Forward Green Cap
+        ctx.fillStyle = '#1b4d3e';
+        ctx.fillRect(100, 62, 120, 42);
+        ctx.fillStyle = '#153e32';
+        ctx.fillRect(92, 96, 136, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(156, 56, 8, 8);
+    } else if (hairStyle === 8) { // Beanie
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(100, 52, 120, 52);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(96, 92, 128, 16);
+    } else { // Hair
+        ctx.fillRect(100, 58, 120, 36);
+        ctx.fillRect(96, 75, 14, 45);
+        ctx.fillRect(210, 75, 14, 45);
+
+        if (hairStyle === 0) { // Spikes
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.moveTo(105 + i * 25, 62);
+                ctx.lineTo(118 + i * 25, 34);
+                ctx.lineTo(130 + i * 25, 62);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else if (hairStyle === 3) { // Topknot / Ponytail
+            ctx.beginPath();
+            ctx.arc(160, 40, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f43f5e';
+            ctx.fillRect(150, 54, 20, 6);
+        } else if (hairStyle === 4) { // Curls
+            for (let i = 0; i < 6; i++) {
+                ctx.beginPath();
+                ctx.arc(110 + i * 20, 58, 16, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    // Glasses if rolled
+    const hasGlasses = rng.chance(0.35);
+    if (hasGlasses) {
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(120, 118, 28, 22);
+        ctx.strokeRect(172, 118, 28, 22);
+        ctx.beginPath();
+        ctx.moveTo(148, 128);
+        ctx.lineTo(172, 128);
+        ctx.stroke();
+    }
+
+    return canvas.toDataURL('image/png');
+}
+
 class ThreeManager {
     containerId: string;
     scene: THREE.Scene | null = null;
     camera: THREE.PerspectiveCamera | null = null;
     renderer: THREE.WebGLRenderer | null = null;
     characters: any = {};
+    playerAvatars: Record<string, string> = {};
     doors: any[] = [];
+    guards: any[] = [];
     innerPlatform: any = null; 
     isAnimating = false;
     labels: any = {}; 
@@ -257,6 +822,7 @@ class ThreeManager {
     currentRoundData: any = null;
     onStateChange: any = null; 
     uniformTextures: any = {}; 
+    faceTextures: any = {}; 
     baseLightIntensity = 0.8;
     ambientLight: any = null;
     dirLight: any = null;
@@ -270,6 +836,7 @@ class ThreeManager {
     spinTimeout: any = null;
     waitingForSpinResolve: any = null;
     clickHandler: ((e: MouseEvent) => void) | null = null;
+    resizeObserver: ResizeObserver | null = null;
 
     constructor(containerId: string) {
         this.containerId = containerId;
@@ -294,7 +861,7 @@ class ThreeManager {
         this.scene.fog = new THREE.FogExp2('#87CEEB', 0.015);
 
         const width = container.clientWidth || window.innerWidth;
-        const height = container.clientHeight || window.innerHeight;
+        const height = container.clientHeight || Math.round(window.innerHeight * 0.85);
 
         this.camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
         this.camera.position.set(0, Math.max(20, this.currentDoorRadius * 1.2), Math.max(35, this.currentDoorRadius * 1.8));
@@ -311,6 +878,12 @@ class ThreeManager {
         this.setupInteraction();
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
+        if (typeof ResizeObserver !== 'undefined') {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.onWindowResize();
+            });
+            this.resizeObserver.observe(container);
+        }
         
         this.animate = this.animate.bind(this);
         this.isAnimating = true;
@@ -325,8 +898,8 @@ class ThreeManager {
         this.dirLight = new THREE.DirectionalLight(0xffffff, this.baseLightIntensity);
         this.dirLight.position.set(20, 40, 20);
         this.dirLight.castShadow = true;
-        this.dirLight.shadow.mapSize.width = 2048;
-        this.dirLight.shadow.mapSize.height = 2048;
+        this.dirLight.shadow.mapSize.width = 1024;
+        this.dirLight.shadow.mapSize.height = 1024;
         this.dirLight.shadow.camera.near = 0.5;
         this.dirLight.shadow.camera.far = 150;
         this.scene.add(this.dirLight);
@@ -360,12 +933,15 @@ class ThreeManager {
         centerBase.position.y = -0.95;
         envGroup.add(centerBase);
 
+        this.guards = [];
         const numGuards = 12;
         for(let i=0; i<numGuards; i++) {
             const angle = (Math.PI * 2 / numGuards) * i;
             const radius = 32; 
             const shape = this.shapes[i % 3]; 
-            const guard = this.createGuard(shape, angle, radius);
+            const isLeader = (i === 0 || i === 6);
+            const guard = this.createGuard(shape, angle, radius, isLeader);
+            this.guards.push(guard);
             envGroup.add(guard);
         }
 
@@ -459,161 +1035,807 @@ class ThreeManager {
         });
     }
 
-    createPlayerTexture(name: string, numberStr: string) {
-        const playerNum = numberStr;
-        if (this.uniformTextures[playerNum]) return this.uniformTextures[playerNum];
+    createFaceTexture(name: string, numberStr: string, skinPalette: any, hairPalette: any, rng: SeededRNG) {
+        const cacheKey = `${name}_face`;
+        if (this.faceTextures[cacheKey]) return this.faceTextures[cacheKey];
 
         const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 512;
+        canvas.width = 512;
+        canvas.height = 512;
         const ctx = canvas.getContext('2d');
-        if(!ctx) return null;
-        
-        ctx.fillStyle = '#2d6a4f'; 
+        if (!ctx) return null;
+
+        // Base skin background
+        ctx.fillStyle = skinPalette.skin;
         ctx.fillRect(0, 0, 512, 512);
-        
-        ctx.fillStyle = 'white';
-        ctx.fillRect(246, 0, 20, 512); 
-        
-        ctx.fillStyle = 'white';
-        ctx.fillRect(60, 100, 160, 100);
-        
-        ctx.fillStyle = '#2d6a4f';
-        ctx.font = 'bold 65px Inter';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(playerNum, 140, 150);
+
+        // Subtle skin tone gradient/lighting
+        const grad = ctx.createRadialGradient(256, 230, 40, 256, 256, 280);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0.08)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 512);
+
+        // Rosy cheeks / blush (optional or subtle)
+        if (rng.chance(0.65)) {
+            ctx.fillStyle = skinPalette.blush;
+            ctx.beginPath();
+            ctx.ellipse(140, 290, 45, 22, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(372, 290, 45, 22, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Freckles (chance 25%)
+        if (rng.chance(0.25)) {
+            ctx.fillStyle = skinPalette.shadow;
+            for (let i = 0; i < 14; i++) {
+                const fx = rng.range(120, 392);
+                const fy = rng.range(270, 320);
+                const fr = rng.range(1.5, 3.5);
+                ctx.beginPath();
+                ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Eye Archetypes: 0 = determined/sharp, 1 = round/curious, 2 = tired/stressed, 3 = cheerful
+        const eyeStyle = rng.int(0, 3);
+        const irisColor = rng.choice(['#261914', '#1c1917', '#3b2f2f', '#1e293b', '#2e1065', '#164e63']);
+        const eyeY = 220;
+        const eyeLX = 150;
+        const eyeRX = 362;
+        const eyeW = 46;
+        const eyeH = eyeStyle === 1 ? 40 : (eyeStyle === 2 ? 26 : 32);
+
+        // Eye Sclera (whites of eyes)
+        ctx.fillStyle = '#f8fafc';
+        [eyeLX, eyeRX].forEach(cx => {
+            ctx.beginPath();
+            ctx.ellipse(cx, eyeY, eyeW, eyeH, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.stroke();
+        });
+
+        // Iris
+        [eyeLX, eyeRX].forEach((cx) => {
+            const lookOffset = (rng.next() - 0.5) * 6;
+            ctx.fillStyle = irisColor;
+            ctx.beginPath();
+            ctx.arc(cx + lookOffset, eyeY + (eyeStyle === 2 ? 3 : 0), 22, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pupil
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath();
+            ctx.arc(cx + lookOffset, eyeY + (eyeStyle === 2 ? 3 : 0), 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye reflection glint
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(cx + lookOffset - 6, eyeY - 6, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(cx + lookOffset + 7, eyeY + 6, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Eyebrows: 0 = determined/sharp, 1 = arched/raised, 2 = worried/slanted, 3 = thick bushy
+        const browStyle = rng.int(0, 3);
+        const browColor = hairPalette.hex || '#18181b';
+        ctx.strokeStyle = browColor;
+        ctx.fillStyle = browColor;
+        ctx.lineCap = 'round';
+
+        const browY = eyeY - 50;
+        if (browStyle === 0) {
+            ctx.lineWidth = 14;
+            ctx.beginPath();
+            ctx.moveTo(100, browY + 12);
+            ctx.lineTo(200, browY - 6);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(412, browY + 12);
+            ctx.lineTo(312, browY - 6);
+            ctx.stroke();
+        } else if (browStyle === 1) {
+            ctx.lineWidth = 11;
+            ctx.beginPath();
+            ctx.quadraticCurveTo(150, browY - 18, 200, browY);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.quadraticCurveTo(362, browY - 18, 312, browY);
+            ctx.stroke();
+        } else if (browStyle === 2) {
+            ctx.lineWidth = 12;
+            ctx.beginPath();
+            ctx.moveTo(100, browY - 10);
+            ctx.lineTo(200, browY + 8);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(412, browY - 10);
+            ctx.lineTo(312, browY + 8);
+            ctx.stroke();
+        } else {
+            ctx.lineWidth = 20;
+            ctx.beginPath();
+            ctx.moveTo(100, browY);
+            ctx.lineTo(205, browY);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(412, browY);
+            ctx.lineTo(307, browY);
+            ctx.stroke();
+        }
+
+        // Under-eye bags for stressed players (chance 40%)
+        if (eyeStyle === 2 || rng.chance(0.4)) {
+            ctx.strokeStyle = skinPalette.shadow;
+            ctx.lineWidth = 4;
+            [eyeLX, eyeRX].forEach(cx => {
+                ctx.beginPath();
+                ctx.arc(cx, eyeY + 28, 28, 0.1 * Math.PI, 0.9 * Math.PI);
+                ctx.stroke();
+            });
+        }
+
+        // Facial Hair / Beard / Moustache / Stubble (chance 35%)
+        if (rng.chance(0.35)) {
+            const facialType = rng.int(0, 3);
+            ctx.fillStyle = hairPalette.hex || '#18181b';
+            ctx.strokeStyle = hairPalette.hex || '#18181b';
+            if (facialType === 0) {
+                // Classic moustache
+                ctx.beginPath();
+                ctx.ellipse(215, 360, 35, 14, 0.15, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(297, 360, 35, 14, -0.15, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (facialType === 1) {
+                // Chin goatee
+                if (ctx.roundRect) {
+                    ctx.beginPath();
+                    ctx.roundRect(226, 420, 60, 45, 10);
+                    ctx.fill();
+                } else {
+                    ctx.fillRect(226, 420, 60, 45);
+                }
+            } else if (facialType === 2) {
+                // 5 o'clock stubble shade
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+                ctx.beginPath();
+                ctx.ellipse(256, 395, 120, 75, 0, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Soul patch
+                ctx.beginPath();
+                ctx.ellipse(256, 415, 16, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Mouth Expressions: 0 = smirk, 1 = grit with teeth, 2 = tense line, 3 = gentle smile
+        const mouthStyle = rng.int(0, 3);
+        const mouthY = 385;
+        ctx.lineCap = 'round';
+
+        if (mouthStyle === 0) {
+            ctx.strokeStyle = skinPalette.lip;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(190, mouthY + 5);
+            ctx.quadraticCurveTo(256, mouthY + 18, 325, mouthY - 8);
+            ctx.stroke();
+        } else if (mouthStyle === 1) {
+            ctx.fillStyle = '#450a0a';
+            ctx.beginPath();
+            ctx.ellipse(256, mouthY, 50, 24, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(226, mouthY - 12, 60, 12);
+            ctx.strokeStyle = skinPalette.lip;
+            ctx.lineWidth = 6;
+            ctx.stroke();
+        } else if (mouthStyle === 2) {
+            ctx.strokeStyle = skinPalette.lip;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(195, mouthY);
+            ctx.lineTo(317, mouthY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(195, mouthY);
+            ctx.lineTo(185, mouthY + 8);
+            ctx.moveTo(317, mouthY);
+            ctx.lineTo(327, mouthY + 8);
+            ctx.stroke();
+        } else {
+            ctx.strokeStyle = skinPalette.lip;
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(190, mouthY - 4);
+            ctx.quadraticCurveTo(256, mouthY + 20, 322, mouthY - 4);
+            ctx.stroke();
+        }
+
+        // Scars, bandages, or beauty marks (chance 30%)
+        if (rng.chance(0.3)) {
+            const markType = rng.int(0, 2);
+            if (markType === 0) {
+                // Battle scar across left cheek
+                ctx.strokeStyle = 'rgba(185, 28, 28, 0.45)';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(125, 150);
+                ctx.lineTo(155, 275);
+                ctx.stroke();
+            } else if (markType === 1) {
+                // Adhesive cheek bandage
+                ctx.fillStyle = '#fde68a';
+                ctx.strokeStyle = '#d97706';
+                ctx.lineWidth = 2;
+                ctx.save();
+                ctx.translate(365, 310);
+                ctx.rotate(-0.2);
+                ctx.fillRect(-28, -12, 56, 24);
+                ctx.strokeRect(-28, -12, 56, 24);
+                ctx.fillStyle = '#fef3c7';
+                ctx.fillRect(-12, -8, 24, 16);
+                ctx.restore();
+            } else {
+                // Beauty mark / mole
+                ctx.fillStyle = '#3f1c10';
+                ctx.beginPath();
+                ctx.arc(330, 345, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
-        this.uniformTextures[playerNum] = tex;
+        this.faceTextures[cacheKey] = tex;
         return tex;
+    }
+
+    createFrontTorsoTexture(numberStr: string) {
+        const playerNum = numberStr;
+        const cacheKey = `${playerNum}_front`;
+        if (this.uniformTextures[cacheKey]) return this.uniformTextures[cacheKey];
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        // Base green tracksuit fabric
+        ctx.fillStyle = '#1b4d3e';
+        ctx.fillRect(0, 0, 512, 512);
+
+        // White racing shoulder stripes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(50, 0, 36, 512);
+        ctx.fillRect(426, 0, 36, 512);
+
+        // White zipper down the middle
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(250, 0, 12, 512);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(244, 90, 24, 34);
+
+        // Left chest number patch (White badge with green number)
+        ctx.fillStyle = '#ffffff';
+        if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(110, 110, 110, 75, 12);
+            ctx.fill();
+        } else {
+            ctx.fillRect(110, 110, 110, 75);
+        }
+
+        ctx.fillStyle = '#1b4d3e';
+        ctx.font = 'bold 50px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(playerNum, 165, 147);
+
+        // Bottom elastic hem band
+        ctx.fillStyle = '#153e32';
+        ctx.fillRect(0, 480, 512, 32);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.uniformTextures[cacheKey] = tex;
+        return tex;
+    }
+
+    createBackTorsoTexture(numberStr: string) {
+        const playerNum = numberStr;
+        const cacheKey = `${playerNum}_back`;
+        if (this.uniformTextures[cacheKey]) return this.uniformTextures[cacheKey];
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        // Base green tracksuit
+        ctx.fillStyle = '#1b4d3e';
+        ctx.fillRect(0, 0, 512, 512);
+
+        // White racing shoulder stripes
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(50, 0, 36, 512);
+        ctx.fillRect(426, 0, 36, 512);
+
+        // Center spine seam
+        ctx.fillStyle = '#153e32';
+        ctx.fillRect(252, 0, 8, 512);
+
+        // Big printed participant number on back
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 130px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(playerNum, 256, 230);
+
+        // Bottom elastic hem band
+        ctx.fillStyle = '#153e32';
+        ctx.fillRect(0, 480, 512, 32);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.uniformTextures[cacheKey] = tex;
+        return tex;
+    }
+
+    createPlayerTexture(name: string, numberStr: string) {
+        return this.createFrontTorsoTexture(numberStr);
     }
 
     createCharacter(name: string, numberStr: string) {
         const seed = generateSeed(name);
+        const rng = new SeededRNG(seed);
         const group = new THREE.Group();
         group.rotation.order = 'YXZ';
-        
-        const skinTone = new THREE.Color().setHSL(0.08, 0.6, 0.3 + (randomSeeded(seed)*0.5));
-        const uniformColor = new THREE.Color(0x2d6a4f);
+
+        const skinPalette = SKIN_PALETTES[rng.int(0, SKIN_PALETTES.length - 1)];
+        const hairPalette = HAIR_PALETTES[rng.int(0, HAIR_PALETTES.length - 1)];
+
+        const skinTone = new THREE.Color(skinPalette.skin);
+        const uniformColor = new THREE.Color(0x1b4d3e);
+        const stripeWhite = new THREE.Color(0xffffff);
 
         const matSkin = new THREE.MeshStandardMaterial({ color: skinTone, roughness: 0.7 });
-        const matUniform = new THREE.MeshStandardMaterial({ color: uniformColor, roughness: 0.9 });
-        const matTorso = new THREE.MeshStandardMaterial({ 
-            color: 0xffffff, map: this.createPlayerTexture(name, numberStr), roughness: 0.9 
-        });
-        const matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+        const matUniform = new THREE.MeshStandardMaterial({ color: uniformColor, roughness: 0.85 });
+        const matWhite = new THREE.MeshStandardMaterial({ color: stripeWhite, roughness: 0.7 });
 
+        const matFace = new THREE.MeshStandardMaterial({
+            map: this.createFaceTexture(name, numberStr, skinPalette, hairPalette, rng) || undefined,
+            roughness: 0.7
+        });
+
+        const matTorsoFront = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            map: this.createFrontTorsoTexture(numberStr) || undefined,
+            roughness: 0.85
+        });
+        const matTorsoBack = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            map: this.createBackTorsoTexture(numberStr) || undefined,
+            roughness: 0.85
+        });
+
+        // Head Group
         const headGroup = new THREE.Group();
         headGroup.position.y = 2.6;
-        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), matSkin);
+
+        // Head Box: +Z face is index 4, which receives the textured face
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), [
+            matSkin, matSkin, matSkin, matSkin, matFace, matSkin
+        ]);
         head.castShadow = true;
         headGroup.add(head);
 
-        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-        const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
-        eyeL.position.set(-0.25, 0.1, -0.61);
-        const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
-        eyeR.position.set(0.25, 0.1, -0.61);
-        headGroup.add(eyeL, eyeR);
-
-        const noseTone = skinTone.clone().multiplyScalar(0.9);
+        // Stylized 3D Nose
+        const noseTone = new THREE.Color(skinPalette.shadow);
         const noseMat = new THREE.MeshStandardMaterial({ color: noseTone, roughness: 0.8 });
-        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.15), noseMat);
-        nose.position.set(0, -0.1, -0.62);
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.12), noseMat);
+        nose.position.set(0, -0.06, 0.64);
+        nose.castShadow = true;
         headGroup.add(nose);
 
-        const mouthMat = new THREE.MeshBasicMaterial({ color: 0x221111 });
-        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.05, 0.1), mouthMat);
-        mouth.position.set(0, -0.3, -0.61);
-        headGroup.add(mouth);
+        // 3D Ears
+        const earGeo = new THREE.BoxGeometry(0.12, 0.28, 0.2);
+        const earL = new THREE.Mesh(earGeo, matSkin);
+        earL.position.set(-0.62, 0, 0.05);
+        earL.castShadow = true;
+        const earR = new THREE.Mesh(earGeo, matSkin);
+        earR.position.set(0.62, 0, 0.05);
+        earR.castShadow = true;
+        headGroup.add(earL, earR);
+
+        // Procedural 3D Hair
+        const hairStyle = rng.int(0, 9);
+        const matHair = new THREE.MeshStandardMaterial({ color: hairPalette.color, roughness: 0.85 });
+        const matAccent = new THREE.MeshStandardMaterial({
+            color: rng.choice([0xef4444, 0x06b6d4, 0xf59e0b, 0xffffff, 0xec4899]),
+            roughness: 0.7
+        });
+        const hairMesh = buildHairMesh(hairStyle, matHair, matAccent, rng);
+        headGroup.add(hairMesh);
+
+        // Glasses for a percentage of players (22%)
+        if (rng.chance(0.22)) {
+            const glassesType = rng.int(0, 2);
+            const glassesMesh = buildGlassesMesh(glassesType);
+            headGroup.add(glassesMesh);
+        }
 
         group.add(headGroup);
 
+        // Torso with front and back jersey prints
         const torso = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.6, 0.8), [
-            matUniform, matUniform, matUniform, matUniform, matUniform, matTorso
+            matUniform, matUniform, matUniform, matUniform, matTorsoFront, matTorsoBack
         ]);
-        torso.position.y = 1.2; torso.castShadow = true; group.add(torso);
+        torso.position.y = 1.2;
+        torso.castShadow = true;
+        group.add(torso);
 
+        // White Collar Rim
+        const collar = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.1, 0.55), matWhite);
+        collar.position.set(0, 2.05, 0);
+        collar.castShadow = true;
+        group.add(collar);
+
+        // Arms with white racing stripes and skin hands
         const armGeo = new THREE.BoxGeometry(0.4, 1.6, 0.4);
         armGeo.translate(0, -0.6, 0);
-        const armL = new THREE.Mesh(armGeo, matUniform);
-        armL.position.set(-0.9, 1.8, 0); armL.castShadow = true; group.add(armL);
-        const armR = new THREE.Mesh(armGeo, matUniform);
-        armR.position.set(0.9, 1.8, 0); armR.castShadow = true; group.add(armR);
 
+        const createArm = (isLeft: boolean) => {
+            const armGroup = new THREE.Group();
+            const armSleeve = new THREE.Mesh(armGeo, matUniform);
+            armSleeve.castShadow = true;
+            armGroup.add(armSleeve);
+
+            // Racing stripe on outer arm
+            const stripeGeo = new THREE.BoxGeometry(0.04, 1.3, 0.12);
+            stripeGeo.translate(0, -0.45, 0);
+            const stripe = new THREE.Mesh(stripeGeo, matWhite);
+            stripe.position.x = isLeft ? -0.21 : 0.21;
+            armGroup.add(stripe);
+
+            // Hand / cuff
+            const cuffGeo = new THREE.BoxGeometry(0.42, 0.1, 0.42);
+            const cuff = new THREE.Mesh(cuffGeo, matWhite);
+            cuff.position.set(0, -1.2, 0);
+            armGroup.add(cuff);
+
+            const handGeo = new THREE.BoxGeometry(0.34, 0.28, 0.34);
+            const hand = new THREE.Mesh(handGeo, matSkin);
+            hand.position.set(0, -1.35, 0);
+            hand.castShadow = true;
+            armGroup.add(hand);
+
+            armGroup.position.set(isLeft ? -0.9 : 0.9, 1.8, 0);
+            return armGroup;
+        };
+
+        const armL = createArm(true);
+        const armR = createArm(false);
+        group.add(armL, armR);
+
+        // Legs with racing stripes and sneakers
         const legGeo = new THREE.BoxGeometry(0.5, 1.2, 0.5);
         legGeo.translate(0, -0.6, 0);
-        const shoeGeo = new THREE.BoxGeometry(0.55, 0.2, 0.6);
-        
-        const legLGroup = new THREE.Group();
-        const legL = new THREE.Mesh(legGeo, matUniform);
-        const shoeL = new THREE.Mesh(shoeGeo, matWhite);
-        shoeL.position.set(0, -1.3, 0.05);
-        legLGroup.add(legL); legLGroup.add(shoeL);
-        legLGroup.position.set(-0.4, 0.4, 0); legLGroup.castShadow = true; group.add(legLGroup);
 
-        const legRGroup = new THREE.Group();
-        const legR = new THREE.Mesh(legGeo, matUniform);
-        const shoeR = new THREE.Mesh(shoeGeo, matWhite);
-        shoeR.position.set(0, -1.3, 0.05);
-        legRGroup.add(legR); legRGroup.add(shoeR);
-        legRGroup.position.set(0.4, 0.4, 0); legRGroup.castShadow = true; group.add(legRGroup);
+        const createLeg = (isLeft: boolean) => {
+            const legGroup = new THREE.Group();
+            const legMesh = new THREE.Mesh(legGeo, matUniform);
+            legMesh.castShadow = true;
+            legGroup.add(legMesh);
+
+            // Side stripe on pants
+            const legStripeGeo = new THREE.BoxGeometry(0.04, 1.2, 0.14);
+            legStripeGeo.translate(0, -0.6, 0);
+            const legStripe = new THREE.Mesh(legStripeGeo, matWhite);
+            legStripe.position.x = isLeft ? -0.26 : 0.26;
+            legGroup.add(legStripe);
+
+            // White slip-on sneaker
+            const shoeGeo = new THREE.BoxGeometry(0.55, 0.24, 0.68);
+            const shoe = new THREE.Mesh(shoeGeo, matWhite);
+            shoe.position.set(0, -1.28, 0.08);
+            shoe.castShadow = true;
+            legGroup.add(shoe);
+
+            // Green accent band on sneaker
+            const shoeAccent = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.06, 0.32), matUniform);
+            shoeAccent.position.set(0, -1.22, 0.1);
+            legGroup.add(shoeAccent);
+
+            legGroup.position.set(isLeft ? -0.4 : 0.4, 0.4, 0);
+            legGroup.castShadow = true;
+            return legGroup;
+        };
+
+        const legLGroup = createLeg(true);
+        const legRGroup = createLeg(false);
+        group.add(legLGroup, legRGroup);
 
         group.userData = { 
-            name, isAlive: true, isMoving: false, moveTime: randomSeeded(seed) * 10,
-            parts: { head, torso, armL, armR, legLGroup, legRGroup },
+            name, isAlive: true, isMoving: false, moveTime: rng.range(0, 10),
+            behavior: 'normal',
+            parts: { head: headGroup, torso, armL, armR, legLGroup, legRGroup },
             localAngle: 0, localRadius: 0
         };
         return group;
     }
 
-    createGuard(shapeType: string, angle: number, radius: number) {
+    getPlayerAvatar(name: string, numberStr?: string): string {
+        if (this.playerAvatars[name]) return this.playerAvatars[name];
+        const num = numberStr || getPlayerNumber(name);
+        const avatar = generateStaticPlayerAvatar(name, num);
+        this.playerAvatars[name] = avatar;
+        return avatar;
+    }
+
+    createGuard(shapeType: string, angle: number, radius: number, isLeader: boolean = false) {
         const group = new THREE.Group();
-        const suitColor = new THREE.Color(0xef233c); 
-        const maskColor = new THREE.Color(0x111111);
-        
-        const matSuit = new THREE.MeshStandardMaterial({ color: suitColor, roughness: 0.9 });
-        const matMask = new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.5 });
+        group.rotation.order = 'YXZ';
+
+        // Vibrant Squid Game palette with Hamster styling
+        const matSuit = new THREE.MeshStandardMaterial({ color: 0xef233c, roughness: 0.7 });
+        const matInnerEar = new THREE.MeshStandardMaterial({ color: 0xfba1b7, roughness: 0.6 });
+        const matMask = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.35 });
         const matWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const matBlack = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
+        const matBuckle = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.85, roughness: 0.2 });
+        const matGoldFur = new THREE.MeshStandardMaterial({ color: 0xdf944a, roughness: 0.85 });
+        const matWhiteFur = new THREE.MeshStandardMaterial({ color: 0xfaf8f5, roughness: 0.85 });
+        const matNose = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.5 });
+        const matGun = new THREE.MeshStandardMaterial({ color: 0x24272c, metalness: 0.7, roughness: 0.35 });
 
-        const head = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), matMask);
-        head.position.y = 2.65;
-        
-        let shapeMesh;
-        if (shapeType === 'circle') shapeMesh = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 8, 24), matWhite);
-        else if (shapeType === 'triangle') {
-            shapeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 3), matWhite);
-            shapeMesh.rotation.x = Math.PI / 2; shapeMesh.rotation.y = Math.PI; 
-        } else { 
-            shapeMesh = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.05, 4, 4), matWhite);
-            shapeMesh.rotation.z = Math.PI / 4;
+        // Chubby Hamster Body in Pink Jumpsuit (Potbelly)
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.15, 1.6, 24), matSuit);
+        torso.position.y = 1.15;
+        group.add(torso);
+
+        // Center zipper line
+        const zipper = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 0.08), matBlack);
+        zipper.position.set(0, 1.15, 1.05);
+        group.add(zipper);
+
+        // Tactical Waist Belt
+        const belt = new THREE.Mesh(new THREE.CylinderGeometry(1.17, 1.17, 0.22, 24), matBlack);
+        belt.position.y = 0.85;
+        group.add(belt);
+
+        // Belt Buckle (front)
+        const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.26, 0.12), matBuckle);
+        buckle.position.set(0, 0.85, 1.18);
+        group.add(buckle);
+
+        // Side Utility Pouches
+        const pouchL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.28), matBlack);
+        pouchL.position.set(-1.18, 0.85, 0);
+        const pouchR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.28), matBlack);
+        pouchR.position.set(1.18, 0.85, 0);
+        group.add(pouchL, pouchR);
+
+        // Tactical Shoulder Harness Straps
+        const strapL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.85, 0.06), matBlack);
+        strapL.position.set(-0.55, 1.55, 0.9);
+        strapL.rotation.z = -0.15;
+        const strapR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.85, 0.06), matBlack);
+        strapR.position.set(0.55, 1.55, 0.9);
+        strapR.rotation.z = 0.15;
+        group.add(strapL, strapR);
+
+        // Cute Hamster Tail in Back
+        const tail = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), matSuit);
+        tail.position.set(0, 0.7, -1.15);
+        group.add(tail);
+
+        // Head Group
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 2.5, 0);
+
+        // Pink Hood
+        const hood = new THREE.Mesh(new THREE.SphereGeometry(0.95, 24, 24), matSuit);
+        headGroup.add(hood);
+
+        // Round Hamster Ears Poking Out of the Hood
+        [-0.72, 0.72].forEach((x) => {
+            const earGroup = new THREE.Group();
+            earGroup.position.set(x, 0.75, 0.05);
+            earGroup.rotation.z = x > 0 ? -0.28 : 0.28;
+            earGroup.rotation.x = -0.12;
+
+            const outerEar = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), matSuit);
+            outerEar.scale.set(1, 1, 0.45);
+            earGroup.add(outerEar);
+
+            const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 14), matInnerEar);
+            innerEar.scale.set(1, 1, 0.3);
+            innerEar.position.z = 0.1;
+            earGroup.add(innerEar);
+
+            headGroup.add(earGroup);
+        });
+
+        if (isLeader) {
+            // Leader Hamster: Exposed cute chubby hamster face matching cover photo!
+            const faceGroup = new THREE.Group();
+            faceGroup.position.set(0, -0.05, 0.35);
+
+            // Upper golden-tan fur
+            const upperFace = new THREE.Mesh(new THREE.SphereGeometry(0.66, 18, 18), matGoldFur);
+            upperFace.position.set(0, 0.16, 0.2);
+            faceGroup.add(upperFace);
+
+            // Chubby white fur cheeks
+            const cheekL = new THREE.Mesh(new THREE.SphereGeometry(0.44, 16, 16), matWhiteFur);
+            cheekL.position.set(-0.35, -0.14, 0.36);
+            const cheekR = new THREE.Mesh(new THREE.SphereGeometry(0.44, 16, 16), matWhiteFur);
+            cheekR.position.set(0.35, -0.14, 0.36);
+            faceGroup.add(cheekL, cheekR);
+
+            // Big glossy dark eyes
+            const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 14), matBlack);
+            eyeL.position.set(-0.28, 0.18, 0.65);
+            const glintL = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), matWhite);
+            glintL.position.set(-0.04, 0.04, 0.12);
+            eyeL.add(glintL);
+
+            const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 14), matBlack);
+            eyeR.position.set(0.28, 0.18, 0.65);
+            const glintR = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), matWhite);
+            glintR.position.set(-0.04, 0.04, 0.12);
+            eyeR.add(glintR);
+            faceGroup.add(eyeL, eyeR);
+
+            // Determined cute eyebrows
+            const browL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.05), matBlack);
+            browL.position.set(-0.28, 0.34, 0.65);
+            browL.rotation.z = -0.2;
+            const browR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.05), matBlack);
+            browR.position.set(0.28, 0.34, 0.65);
+            browR.rotation.z = 0.2;
+            faceGroup.add(browL, browR);
+
+            // Cute pink nose
+            const nose = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), matNose);
+            nose.position.set(0, 0.02, 0.74);
+            faceGroup.add(nose);
+
+            // Whiskers
+            [-1, 1].forEach((dir) => {
+                for (let w = -1; w <= 1; w++) {
+                    const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.55, 6), matWhite);
+                    whisker.rotation.z = Math.PI / 2 + (w * 0.15 * dir);
+                    whisker.rotation.y = dir * 0.3;
+                    whisker.position.set(dir * 0.38, -0.02 + w * 0.06, 0.62);
+                    faceGroup.add(whisker);
+                }
+            });
+
+            // Black Visor Cap on forehead with Square symbol
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.3, 0.38), matMask);
+            cap.position.set(0, 0.48, 0.58);
+            const squareSymbol = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.05), matWhite);
+            squareSymbol.position.set(0, 0, 0.2);
+            cap.add(squareSymbol);
+            faceGroup.add(cap);
+
+            headGroup.add(faceGroup);
+        } else {
+            // Masked Hamster Guard with Squid Game symbol
+            const mask = new THREE.Mesh(new THREE.SphereGeometry(0.78, 20, 20), matMask);
+            mask.position.set(0, 0, 0.3);
+            mask.scale.set(0.95, 0.95, 0.65);
+            headGroup.add(mask);
+
+            let shapeMesh;
+            if (shapeType === 'circle') {
+                shapeMesh = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.045, 10, 28), matWhite);
+            } else if (shapeType === 'triangle') {
+                shapeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.08, 3), matWhite);
+                shapeMesh.rotation.x = Math.PI / 2;
+                shapeMesh.rotation.y = Math.PI;
+            } else {
+                shapeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.08), matWhite);
+            }
+            shapeMesh.position.set(0, 0.05, 0.76);
+            headGroup.add(shapeMesh);
         }
-        shapeMesh.position.z = 0.66; 
-        head.add(shapeMesh); group.add(head);
 
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.7, 0.9), matSuit);
-        body.position.y = 1.2; group.add(body);
+        group.add(headGroup);
 
-        const armGeo = new THREE.BoxGeometry(0.45, 1.6, 0.45);
+        // Arms & Tactical Stance
+        const armGeo = new THREE.CylinderGeometry(0.28, 0.26, 1.0, 14);
+        armGeo.translate(0, -0.4, 0);
+
+        // Left arm holding front barrel
+        const armLGroup = new THREE.Group();
+        armLGroup.position.set(-0.95, 1.45, 0.2);
+        armLGroup.rotation.x = -Math.PI / 2.6;
+        armLGroup.rotation.y = 0.35;
         const armL = new THREE.Mesh(armGeo, matSuit);
-        armL.position.set(-0.9, 1.2, 0.5); armL.rotation.x = -Math.PI / 2.2; group.add(armL);
-        const armR = new THREE.Mesh(armGeo, matSuit);
-        armR.position.set(0.9, 1.2, 0.5); armR.rotation.x = -Math.PI / 2.2; group.add(armR);
+        const gloveL = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), matBlack);
+        gloveL.position.set(0, -0.9, 0);
+        armLGroup.add(armL, gloveL);
+        group.add(armLGroup);
 
-        const legGeo = new THREE.BoxGeometry(0.55, 1.2, 0.55);
-        const legL = new THREE.Mesh(legGeo, matSuit);
-        legL.position.set(-0.4, -0.2, 0); group.add(legL);
-        const legR = new THREE.Mesh(legGeo, matSuit);
-        legR.position.set(0.4, -0.2, 0); group.add(legR);
-        
-        const gunMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const gun = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.35, 1.8), gunMat);
-        gun.position.set(0, 1.1, 1.0); group.add(gun);
+        // Right arm on trigger / grip
+        const armRGroup = new THREE.Group();
+        armRGroup.position.set(0.95, 1.45, 0.2);
+        armRGroup.rotation.x = -Math.PI / 2.4;
+        armRGroup.rotation.y = -0.35;
+        const armR = new THREE.Mesh(armGeo, matSuit);
+        const gloveR = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), matBlack);
+        gloveR.position.set(0, -0.9, 0);
+        armRGroup.add(armR, gloveR);
+        group.add(armRGroup);
+
+        // Submachine Gun / Blaster
+        const gunGroup = new THREE.Group();
+        gunGroup.position.set(0, 1.15, 0.95);
+        gunGroup.rotation.x = -0.05;
+
+        // Gun receiver
+        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 1.5), matGun);
+        gunGroup.add(gunBody);
+
+        // Gun barrel
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 10), matGun);
+        barrel.rotation.x = Math.PI / 2;
+        barrel.position.set(0, 0, 0.95);
+        gunGroup.add(barrel);
+
+        // Gun magazine
+        const mag = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.24), matBlack);
+        mag.position.set(0, -0.3, 0.2);
+        mag.rotation.x = 0.15;
+        gunGroup.add(mag);
+
+        group.add(gunGroup);
+
+        // Short Chubby Legs in Pink Trousers
+        [-0.42, 0.42].forEach((x) => {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.65, 14), matSuit);
+            leg.position.set(x, 0.32, 0);
+            group.add(leg);
+
+            // Black Combat Boots
+            const boot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.32, 0.7), matBlack);
+            boot.position.set(x, 0.06, 0.12);
+            group.add(boot);
+        });
 
         group.position.set(Math.cos(angle) * radius, 1, Math.sin(angle) * radius);
-        group.lookAt(0, 1, 0); 
-        group.traverse(child => { if ((child as THREE.Mesh).isMesh) child.castShadow = true; });
+        group.lookAt(0, 1, 0);
+        group.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) child.castShadow = true;
+        });
+
+        group.userData = {
+            torso,
+            gunGroup,
+            headGroup,
+            idleOffset: angle * 2
+        };
+
         return group;
     }
 
@@ -714,7 +1936,7 @@ class ThreeManager {
 
             for (let i = 0; i < playersInRing; i++) {
                 const name = players[playersPlaced];
-                const numberStr = (playersPlaced + 1).toString();
+                const numberStr = getPlayerNumber(name);
                 const char = this.createCharacter(name, numberStr);
                 const angle = i * angleStep;
                 
@@ -887,28 +2109,39 @@ class ThreeManager {
                 movePromises.push(new Promise<void>(resolve => {
                     const tl = gsap.timeline({ onComplete: () => {
                         char.userData.isMoving = false;
-                        gsap.to([char.userData.parts.armL.rotation, char.userData.parts.armR.rotation, char.userData.parts.legLGroup.rotation, char.userData.parts.legRGroup.rotation], {x: 0, duration: 0.2});
+                        char.userData.behavior = 'normal';
+                        gsap.to([
+                            char.userData.parts.armL.rotation, 
+                            char.userData.parts.armR.rotation, 
+                            char.userData.parts.legLGroup.rotation, 
+                            char.userData.parts.legRGroup.rotation,
+                            char.userData.parts.head.rotation
+                        ], {x: 0, duration: 0.2});
                         if (!isEliminated) char.lookAt(0, 1, 0);
                         resolve();
                     }});
                     
                     if (behavior === 'crawl') {
-                        tl.to(char.rotation, { x: -Math.PI / 2.5, duration: 0.3 });
-                        tl.to(char.position, { y: 0.5, duration: 0.3 }, "<");
+                        char.userData.behavior = 'crawl';
+                        tl.to(char.rotation, { x: Math.PI / 2.3, duration: 0.3 });
+                        tl.to(char.position, { y: 0.45, duration: 0.3 }, "<");
+                        tl.to(char.userData.parts.head.rotation, { x: -0.35, duration: 0.3 }, "<");
                         tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: duration, ease: "none" });
                         if (!isEliminated) {
                             tl.to(char.rotation, { x: 0, duration: 0.3 });
                             tl.to(char.position, { y: 1.0, duration: 0.3 }, "<");
+                            tl.to(char.userData.parts.head.rotation, { x: 0, duration: 0.3 }, "<");
                         }
                     } else if (behavior === 'fall') {
+                        char.userData.behavior = 'fall';
                         const midX = (char.position.x + finalPos.x) / 2;
                         const midZ = (char.position.z + finalPos.z) / 2;
                         
                         tl.to(char.position, { x: midX, z: midZ, duration: duration / 3, ease: "power1.inOut" }, 0);
                         tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor((duration/3) / 0.2) }, 0);
                         
-                        tl.to(char.rotation, { x: -Math.PI / 2.2, duration: 0.2 }, duration/3);
-                        tl.to(char.position, { y: 0.5, duration: 0.2 }, duration/3);
+                        tl.to(char.rotation, { x: Math.PI / 2.2, duration: 0.2 }, duration/3);
+                        tl.to(char.position, { y: 0.45, duration: 0.2 }, duration/3);
                         tl.to({}, { duration: 0.5 }); // pause
                         
                         if (!isEliminated) {
@@ -978,13 +2211,21 @@ class ThreeManager {
                 char.userData.isAlive = false;
                 
                 char.traverse((child: any) => {
-                    if (child.isMesh && child.material && child.material.color) {
-                        child.material = child.material.clone();
-                        child.material.color.setHex(0x555555);
+                    if (child.isMesh && child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map((mat: any) => {
+                                const m = mat.clone();
+                                if (m.color) m.color.setHex(0x555555);
+                                return m;
+                            });
+                        } else if (child.material.color) {
+                            child.material = child.material.clone();
+                            child.material.color.setHex(0x555555);
+                        }
                     }
                 });
 
-                gsap.to(char.rotation, { x: -Math.PI / 2, duration: 0.5, ease: "bounce.out" });
+                gsap.to(char.rotation, { x: Math.PI / 2, duration: 0.5, ease: "bounce.out" });
                 gsap.to(char.position, { y: 0.3, duration: 0.5 });
             });
             
@@ -1123,8 +2364,9 @@ class ThreeManager {
     onWindowResize() {
         const container = document.getElementById(this.containerId);
         if(!container || !this.camera || !this.renderer) return;
-        const width = container.clientWidth;
-        const height = container.clientHeight;
+        const width = container.clientWidth || window.innerWidth;
+        const height = container.clientHeight || Math.round(window.innerHeight * 0.85);
+        if (width <= 0 || height <= 0) return;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
@@ -1139,12 +2381,26 @@ class ThreeManager {
             if(char && char.userData.isAlive) {
                 char.userData.parts.torso.scale.y = 1 + Math.sin(time * 3 + char.userData.moveTime) * 0.02;
                 if(char.userData.isMoving) {
-                    const speed = 15;
-                    char.userData.parts.legLGroup.rotation.x = Math.sin(time * speed) * 0.6;
-                    char.userData.parts.legRGroup.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
-                    char.userData.parts.armL.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
-                    char.userData.parts.armR.rotation.x = Math.sin(time * speed) * 0.6;
+                    if (char.userData.behavior === 'crawl') {
+                        const crawlSpeed = 10;
+                        char.userData.parts.armL.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed) * 0.35;
+                        char.userData.parts.armR.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed + Math.PI) * 0.35;
+                        char.userData.parts.legLGroup.rotation.x = Math.sin(time * crawlSpeed + Math.PI) * 0.2;
+                        char.userData.parts.legRGroup.rotation.x = Math.sin(time * crawlSpeed) * 0.2;
+                    } else {
+                        const speed = 15;
+                        char.userData.parts.legLGroup.rotation.x = Math.sin(time * speed) * 0.6;
+                        char.userData.parts.legRGroup.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
+                        char.userData.parts.armL.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
+                        char.userData.parts.armR.rotation.x = Math.sin(time * speed) * 0.6;
+                    }
                 }
+            }
+        });
+
+        this.guards.forEach((guard: any) => {
+            if (guard && guard.userData && guard.userData.torso) {
+                guard.userData.torso.scale.y = 1 + Math.sin(time * 2.5 + guard.userData.idleOffset) * 0.015;
             }
         });
 
@@ -1159,6 +2415,10 @@ class ThreeManager {
         }
         if (this.labelContainer && this.labelContainer.parentNode) {
             this.labelContainer.parentNode.removeChild(this.labelContainer);
+        }
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
         }
         window.removeEventListener('resize', this.onWindowResize.bind(this));
     }
@@ -1233,8 +2493,13 @@ const StudentManager = ({ students, setStudents, onBack }: any) => {
     );
 };
 
-export default function SquidGamePicker() {
+interface SquidGamePickerProps {
+    onViewChange?: (view: ViewState) => void;
+}
+
+export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) {
     const [view, setView] = useState('home'); 
+    const [activeGame, setActiveGame] = useState<'mingle' | 'tag'>('mingle');
     const [students, setStudents] = useState<string[]>(getSavedRoster());
     const [gameState, setGameState] = useState<any>({ phase: 'IDLE', msg: '', eliminatedThisRound: [] }); 
     const [chosenOnes, setChosenOnes] = useState<string[]>([]);
@@ -1243,6 +2508,7 @@ export default function SquidGamePicker() {
     const [pickCount, setPickCount] = useState(1);
     
     const threeManagerRef = useRef<ThreeManager | null>(null);
+    const isFirstMountRef = useRef(true);
     const isAudioMuted = useRef(false);
     const [muteUI, setMuteUI] = useState(false);
 
@@ -1267,6 +2533,10 @@ export default function SquidGamePicker() {
     }, []);
 
     useEffect(() => {
+        if (isFirstMountRef.current) {
+            isFirstMountRef.current = false;
+            return;
+        }
         if(view === 'home' && threeManagerRef.current && gameState.phase === 'IDLE') {
             threeManagerRef.current.spawnPlayers(students);
             if(threeManagerRef.current.camera) {
@@ -1291,7 +2561,7 @@ export default function SquidGamePicker() {
         if (gameState.phase === 'WINNER' && gameMode === 'picker') {
             chosenOnes.forEach((name, idx) => {
                 timeouts.push(setTimeout(() => {
-                    const pNum = students.indexOf(name) + 1;
+                    const pNum = getPlayerNumber(name);
                     announce(`Player ${pNum}, eliminated.`);
                 }, idx * 1500));
             });
@@ -1299,7 +2569,7 @@ export default function SquidGamePicker() {
             if (gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0) {
                 gameState.eliminatedThisRound.forEach((name: string, idx: number) => {
                     timeouts.push(setTimeout(() => {
-                        const pNum = students.indexOf(name) + 1;
+                        const pNum = getPlayerNumber(name);
                         announce(`Player ${pNum}, eliminated.`);
                     }, idx * 1500));
                 });
@@ -1434,9 +2704,11 @@ export default function SquidGamePicker() {
                     <Square className="w-12 h-12 animate-pulse" style={{animationDelay: '0.6s'}} />
                 </div>
                 <h1 className="text-5xl text-white font-bold mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 relative z-10" style={{fontFamily: "'Fredoka', sans-serif"}}>
-                    ELIMINATION <span className="text-rose-500">PICKER</span>
+                    {activeGame === 'tag' ? 'TAG' : 'MINGLE'} <span className="text-rose-500">GAME</span>
                 </h1>
-                <p className="text-lg text-emerald-400 mb-8 font-medium tracking-widest uppercase relative z-10">Will your number be called?</p>
+                <p className="text-lg text-emerald-400 mb-8 font-medium tracking-widest uppercase relative z-10">
+                    {activeGame === 'tag' ? 'Tag • Will your number be called?' : 'Mingle Game • Will your number be called?'}
+                </p>
                 
                 <div className="bg-slate-800/80 rounded-2xl p-4 mb-8 border border-slate-700">
                     <div className="flex gap-4 justify-center mb-4">
@@ -1446,7 +2718,7 @@ export default function SquidGamePicker() {
                             active={gameMode === 'picker'}
                             className="flex-1 text-sm py-2"
                         >
-                            <MousePointerClick className="w-4 h-4" /> Picker Mode
+                            <MousePointerClick className="w-4 h-4" /> {activeGame === 'tag' ? 'Tag Picker' : 'Picker Mode'}
                         </Button>
                         <Button 
                             variant={gameMode === 'survival' ? 'success' : 'secondary'} 
@@ -1454,7 +2726,7 @@ export default function SquidGamePicker() {
                             active={gameMode === 'survival'}
                             className="flex-1 text-sm py-2"
                         >
-                            <Skull className="w-4 h-4" /> Survival Mode
+                            {activeGame === 'tag' ? <Tag className="w-4 h-4" /> : <Users className="w-4 h-4" />} {activeGame === 'tag' ? 'Tag Survival' : 'Mingle (Survival)'}
                         </Button>
                     </div>
                     
@@ -1521,6 +2793,16 @@ export default function SquidGamePicker() {
                 </div>
                 
                 <div className="flex gap-3 pointer-events-auto">
+                    {onViewChange && (
+                        <button 
+                            onClick={() => onViewChange('home')}
+                            className="h-12 px-4 bg-slate-900/90 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
+                            title="Back to Studio"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            <span className="hidden sm:inline">Studio</span>
+                        </button>
+                    )}
                     <button 
                         onClick={toggleFullscreen} 
                         className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
@@ -1539,15 +2821,18 @@ export default function SquidGamePicker() {
 
             {gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0 && (
                 <div className="absolute right-6 top-1/4 w-72 flex flex-col gap-2 pointer-events-none">
-                    {gameState.eliminatedThisRound.map((name: string, idx: number) => (
-                        <div key={idx} className="bg-slate-900/90 border-l-4 border-rose-500 text-white p-3 rounded-r-lg shadow-lg flex items-center gap-3 transition-all" style={{animation: 'fade-in-right 0.3s ease-out forwards', animationDelay: `${idx * 0.1}s`, opacity: 0, transform: 'translateX(20px)'}}>
-                            <Skull className="text-rose-500 w-5 h-5" />
-                            <div>
-                                <span className="font-mono text-emerald-400 font-bold mr-2">#{(students.indexOf(name) + 1).toString()}</span>
-                                        <span className="text-sm font-semibold">{name}</span>
+                    {gameState.eliminatedThisRound.map((name: string, idx: number) => {
+                        const playerNum = getPlayerNumber(name);
+                        return (
+                            <div key={idx} className="bg-slate-900/90 border-l-4 border-rose-500 text-white p-3 rounded-r-lg shadow-lg flex items-center gap-3 transition-all" style={{animation: 'fade-in-right 0.3s ease-out forwards', animationDelay: `${idx * 0.1}s`, opacity: 0, transform: 'translateX(20px)'}}>
+                                <Skull className="text-rose-500 w-5 h-5" />
+                                <div>
+                                    <span className="font-mono text-emerald-400 font-bold mr-2">#{playerNum}</span>
+                                    <span className="text-sm font-semibold">{name}</span>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
             <style dangerouslySetInnerHTML={{__html: `
@@ -1581,30 +2866,22 @@ export default function SquidGamePicker() {
                         
                         <div className="flex flex-col gap-6 mb-10 relative z-10">
                             {chosenOnes.map((name, i) => {
-                                const playerNum = (students.indexOf(name) + 1).toString();
-                                                                                                const canvas = document.createElement('canvas');
-                                canvas.width = 256; canvas.height = 256;
-                                const ctx = canvas.getContext('2d');
-                                if (ctx) {
-                                    ctx.fillStyle = '#2d6a4f';
-                                    ctx.fillRect(0, 0, 256, 256);
-                                    ctx.fillStyle = '#ffffff';
-                                    ctx.textAlign = 'center';
-                                    ctx.textBaseline = 'middle';
-                                    ctx.font = 'bold 120px "Fredoka", sans-serif';
-                                    ctx.fillText(playerNum, 128, 128);
-                                }
-                                const playerImage = canvas.toDataURL();
+                                const playerNum = getPlayerNumber(name);
+                                const playerAvatar = threeManagerRef.current?.getPlayerAvatar(name, playerNum) || 
+                                                     generateStaticPlayerAvatar(name, playerNum);
                                 return (
-                                    <div key={i} className="flex items-center gap-6 bg-black/50 p-6 rounded-2xl border border-slate-700">
-                                        <div className={`w-24 h-24 shrink-0 rounded-xl bg-slate-800 border-2 overflow-hidden flex items-center justify-center ${gameMode === "picker" ? "border-rose-500" : "border-emerald-500"}`}>
-                                            <img src={playerImage} alt="Player Avatar" className="w-full h-full object-cover" />
+                                    <div key={i} className="flex items-center gap-6 bg-slate-950/80 p-6 rounded-2xl border-2 border-slate-700/80 shadow-2xl backdrop-blur-md">
+                                        <div className={`w-28 h-28 sm:w-32 sm:h-32 shrink-0 rounded-2xl bg-slate-900 border-2 overflow-hidden flex items-center justify-center relative shadow-[0_0_30px_rgba(244,63,94,0.45)] ${gameMode === "picker" ? "border-rose-500" : "border-emerald-500"}`}>
+                                            <img src={playerAvatar} alt={name} className="w-full h-full object-cover" />
+                                            <div className="absolute bottom-1.5 right-1.5 bg-black/85 backdrop-blur-sm border border-emerald-500/50 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold text-emerald-400">
+                                                #{playerNum}
+                                            </div>
                                         </div>
                                         <div className="flex-1 text-left">
                                             <div className="text-xl text-rose-300 font-bold mb-2 tracking-widest uppercase">
                                                 PLAYER #{playerNum}
                                             </div>
-                                            <div className="text-4xl sm:text-5xl text-white font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 uppercase" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                            <div className="text-4xl sm:text-5xl text-white font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 uppercase tracking-wide" style={{fontFamily: "'Fredoka', sans-serif"}}>
                                                 {name}
                                             </div>
                                         </div>
@@ -1623,7 +2900,14 @@ export default function SquidGamePicker() {
     );
 
     return (
-        <div id="squid-picker-root" className="w-full h-full bg-[#0f172a] text-slate-100 flex relative overflow-hidden">
+        <div 
+            id="squid-picker-root" 
+            className={`w-full bg-[#0f172a] text-slate-100 flex relative overflow-hidden transition-all duration-300 ${
+                isFullscreen 
+                    ? 'fixed inset-0 z-50 h-screen w-screen rounded-none' 
+                    : 'min-h-[85vh] h-[85vh] rounded-3xl shadow-2xl border border-slate-800'
+            }`}
+        >
             {/* Absolute positioning for the Three.js canvas so it stays under the UI layer and takes full space */}
             <div id="canvas-container" className="absolute inset-0 z-10" />
             <iframe id="yt-player" className="hidden" src="https://www.youtube.com/embed/SbAKYgfYET8?enablejsapi=1&autoplay=0" allow="autoplay" title="YouTube video player" frameBorder="0"></iframe>
@@ -1635,28 +2919,57 @@ export default function SquidGamePicker() {
                     <div className="w-72 bg-slate-900/95 backdrop-blur border-r border-slate-700 flex flex-col pointer-events-auto shadow-2xl z-30">
                         <div className="p-8 border-b border-slate-800 flex items-center gap-4">
                             <div className="w-12 h-12 bg-rose-600 rounded-xl flex items-center justify-center text-2xl shadow-[0_0_15px_rgba(244,63,94,0.5)]">
-                                <Square className="text-white w-6 h-6" />
+                                {activeGame === 'tag' ? <Tag className="text-white w-6 h-6" /> : <Square className="text-white w-6 h-6" />}
                             </div>
-                            <h2 className="font-bold text-2xl leading-none text-white tracking-wide" style={{fontFamily: "'Fredoka', sans-serif"}}>ELIMINATION<br/><span className="text-rose-500">PICKER</span></h2>
+                            <div>
+                                <h2 className="font-bold text-2xl leading-none text-white tracking-wide" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                    {activeGame === 'tag' ? 'TAG' : 'MINGLE'}<br/><span className="text-rose-500">GAME</span>
+                                </h2>
+                                <span className="text-[10px] text-emerald-400 font-mono tracking-wider uppercase block mt-1">
+                                    {activeGame === 'tag' ? 'Tag Active' : 'Mingle Active'}
+                                </span>
+                            </div>
                         </div>
                         
                         <nav className="flex-1 p-6 flex flex-col gap-3">
-                            <button onClick={() => setView('home')} className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'home' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}>
-                                <Gamepad2 className="w-6 h-6 text-center" /> Control Room
+                            <button 
+                                onClick={() => setView('students')} 
+                                className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'students' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+                                title="Player Roster"
+                            >
+                                <ClipboardList className="w-6 h-6 text-center" /> 
+                                <span className="font-semibold">Player Roster</span>
                             </button>
-                            <button onClick={() => setView('students')} className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'students' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}>
-                                <ClipboardList className="w-6 h-6 text-center" /> Player Roster
+
+                            <button 
+                                onClick={() => {
+                                    setActiveGame('mingle');
+                                    setView('home');
+                                }} 
+                                className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'home' && activeGame === 'mingle' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+                                title="Mingle Game"
+                            >
+                                <Users className="w-6 h-6 text-center text-rose-400" /> 
+                                <span className="font-semibold text-white">Mingle Game</span>
                             </button>
-                            <button onClick={toggleFullscreen} className="flex items-center gap-4 p-4 rounded-xl transition font-medium hover:bg-slate-800 text-slate-400 hover:text-white">
-                                {isFullscreen ? <Minimize className="w-6 h-6 text-emerald-400" /> : <Maximize className="w-6 h-6 text-center" />}
-                                <span>{isFullscreen ? 'Exit Full Screen' : 'Full Screen'}</span>
+
+                            <button 
+                                onClick={() => {
+                                    setActiveGame('tag');
+                                    setView('home');
+                                }} 
+                                className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'home' && activeGame === 'tag' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+                                title="Tag"
+                            >
+                                <Tag className="w-6 h-6 text-center text-rose-400" /> 
+                                <span className="font-semibold text-white">Tag</span>
                             </button>
                         </nav>
                         
                         <div className="p-6 border-t border-slate-800 text-xs text-slate-600 text-center uppercase tracking-widest font-bold flex flex-col gap-1">
                             <span>Version 3.0</span>
                             <span className={gameMode === 'picker' ? 'text-rose-500' : 'text-emerald-500'}>
-                                {gameMode === 'picker' ? 'Picker Active' : 'Survival Active'}
+                                {activeGame === 'tag' ? 'Tag' : 'Mingle'} • {gameMode === 'picker' ? 'Picker Active' : 'Survival Active'}
                             </span>
                         </div>
                     </div>
@@ -1665,6 +2978,16 @@ export default function SquidGamePicker() {
                 <div className="flex-1 relative">
                     {(view === 'home' || view === 'students') && (
                         <div className="absolute top-6 right-6 z-40 flex items-center gap-3 pointer-events-auto">
+                            {onViewChange && (
+                                <button
+                                    onClick={() => onViewChange('home')}
+                                    className="h-12 px-4 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
+                                    title="Back to Studio"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                    <span>Studio</span>
+                                </button>
+                            )}
                             <button
                                 onClick={toggleFullscreen}
                                 className="w-12 h-12 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
