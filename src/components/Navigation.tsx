@@ -32,6 +32,7 @@ export function Navigation({ currentView, onViewChange, isMobileMenuOpen, setIsM
   const navItems = [
     { id: "home", label: "Home", icon: Home, view: "home" as ViewState },
     { id: "public-dashboard", label: "Community", icon: Users, view: "public-dashboard" as ViewState },
+    { id: "squid-game-picker", label: "Name Picker", icon: Users, view: "squid-game-picker" as ViewState },
     ...(user && !user.isAnonymous ? [{ id: "games", label: "My Games", icon: Gamepad2, view: "games" as ViewState }] : []),
     { id: "homework", label: "Homework", icon: BookOpen, view: "homework" as ViewState },
     ...(isAdmin ? [{ id: "admin-dashboard", label: "Admin Dashboard", icon: Shield, view: "admin-dashboard" as ViewState }] : []),

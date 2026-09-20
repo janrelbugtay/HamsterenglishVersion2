@@ -453,13 +453,21 @@ class AudioEngine {
 }
 let globalAudio: AudioEngine | null = null;
 
+export const stopAnnounce = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+};
+
 const announce = (text: string) => {
     if (globalAudio?.muted) return;
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     
     // Attempt to grab voices
     let voices = window.speechSynthesis.getVoices();
     
     const speak = () => {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
         voices = window.speechSynthesis.getVoices();
         const utterance = new SpeechSynthesisUtterance(text);
         
@@ -837,6 +845,12 @@ class ThreeManager {
     waitingForSpinResolve: any = null;
     clickHandler: ((e: MouseEvent) => void) | null = null;
     resizeObserver: ResizeObserver | null = null;
+    gameType: 'mingle' | 'tag' = 'mingle';
+    mingleEnvGroup: THREE.Group | null = null;
+    tagEnvGroup: THREE.Group | null = null;
+    itPlayerName: string = '';
+    tagRoundCount: number = 0;
+    lastCaughtPlayer: string | null = null;
 
     constructor(containerId: string) {
         this.containerId = containerId;
@@ -915,9 +929,262 @@ class ThreeManager {
         this.scene.add(this.alarmLight);
     }
 
+    createPlaygroundEnvironment(): THREE.Group {
+        const group = new THREE.Group();
+
+        // 1. Lush Park Grass Ground - Expansive cylinder spanning radius 240
+        const grassGeo = new THREE.CylinderGeometry(240, 240, 2.5, 64);
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.85 }); // vibrant playground grass
+        const grass = new THREE.Mesh(grassGeo, grassMat);
+        grass.position.y = -1.25;
+        grass.receiveShadow = true;
+        group.add(grass);
+
+        // Surrounding darker park meadow ring (radius 26.5 to 235)
+        const outerFieldGeo = new THREE.RingGeometry(26.5, 235, 64);
+        const outerFieldMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.9 });
+        const outerField = new THREE.Mesh(outerFieldGeo, outerFieldMat);
+        outerField.rotation.x = -Math.PI / 2;
+        outerField.position.y = 0.01;
+        outerField.receiveShadow = true;
+        group.add(outerField);
+
+        // 2. Large Circular Play Area Boundary Ring (radius 26, wide chalk line)
+        const boundaryGeo = new THREE.RingGeometry(25.3, 26.0, 96);
+        const boundaryMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const boundary = new THREE.Mesh(boundaryGeo, boundaryMat);
+        boundary.rotation.x = -Math.PI / 2;
+        boundary.position.y = 0.02;
+        group.add(boundary);
+
+        // Inner decorative circle (radius 13) with dashed-like appearance or soft tint
+        const innerRingGeo = new THREE.RingGeometry(12.8, 13.2, 64);
+        const innerRingMat = new THREE.MeshBasicMaterial({ color: 0xfef08a, side: THREE.DoubleSide, opacity: 0.6, transparent: true });
+        const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+        innerRing.rotation.x = -Math.PI / 2;
+        innerRing.position.y = 0.02;
+        group.add(innerRing);
+
+        // Center park logo / star emblem
+        const centerCircleGeo = new THREE.CircleGeometry(2, 32);
+        const centerCircleMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide });
+        const centerCircle = new THREE.Mesh(centerCircleGeo, centerCircleMat);
+        centerCircle.rotation.x = -Math.PI / 2;
+        centerCircle.position.y = 0.025;
+        group.add(centerCircle);
+
+        // 3. Boundary Cones along the edge (Radius 27.2)
+        const numCones = 16;
+        for (let i = 0; i < numCones; i++) {
+            const angle = (Math.PI * 2 / numCones) * i;
+            const cx = Math.cos(angle) * 27.2;
+            const cz = Math.sin(angle) * 27.2;
+
+            const coneGroup = new THREE.Group();
+            const coneBase = new THREE.Mesh(
+                new THREE.BoxGeometry(1.2, 0.1, 1.2),
+                new THREE.MeshStandardMaterial({ color: 0xf97316 })
+            );
+            coneBase.position.y = 0.05;
+            coneGroup.add(coneBase);
+
+            const coneBody = new THREE.Mesh(
+                new THREE.ConeGeometry(0.5, 1.4, 16),
+                new THREE.MeshStandardMaterial({ color: 0xf97316 })
+            );
+            coneBody.position.y = 0.75;
+            coneGroup.add(coneBody);
+
+            const stripe = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.38, 0.3, 16),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            stripe.position.y = 0.7;
+            coneGroup.add(stripe);
+
+            coneGroup.position.set(cx, 0, cz);
+            group.add(coneGroup);
+        }
+
+        // 4. Stylized Park Trees in the background and perimeter
+        const treeLocations = [
+            // Inner perimeter trees
+            { x: -33, z: -15, scale: 1.2 },
+            { x: -28, z: -30, scale: 1.4 },
+            { x: -10, z: -38, scale: 1.5 },
+            { x: 12, z: -37, scale: 1.3 },
+            { x: 30, z: -28, scale: 1.4 },
+            { x: 36, z: -12, scale: 1.2 },
+            { x: -38, z: 12, scale: 1.3 },
+            { x: -32, z: 28, scale: 1.1 },
+            { x: 33, z: 26, scale: 1.2 },
+            { x: 39, z: 10, scale: 1.4 },
+            { x: 22, z: 38, scale: 1.3 },
+            { x: -20, z: 38, scale: 1.2 },
+            // Outer forest / depth trees for full rich park horizon
+            { x: -55, z: -40, scale: 1.8 },
+            { x: -45, z: -60, scale: 2.0 },
+            { x: 0, z: -65, scale: 2.2 },
+            { x: 42, z: -55, scale: 1.9 },
+            { x: 60, z: -35, scale: 1.7 },
+            { x: 65, z: 15, scale: 1.8 },
+            { x: 50, z: 50, scale: 2.0 },
+            { x: -50, z: 50, scale: 1.8 },
+            { x: -65, z: 0, scale: 2.1 },
+        ];
+
+        treeLocations.forEach(loc => {
+            const tree = new THREE.Group();
+            // Trunk
+            const trunkGeo = new THREE.CylinderGeometry(0.5 * loc.scale, 0.7 * loc.scale, 3.5 * loc.scale, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 1.75 * loc.scale;
+            trunk.castShadow = true;
+            tree.add(trunk);
+
+            // 3-tiered foliage
+            const greens = [0x15803d, 0x16a34a, 0x22c55e];
+            for (let t = 0; t < 3; t++) {
+                const foliageGeo = new THREE.ConeGeometry((2.6 - t * 0.5) * loc.scale, 2.5 * loc.scale, 8);
+                const foliageMat = new THREE.MeshStandardMaterial({ color: greens[t], roughness: 0.8 });
+                const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+                foliage.position.y = (3.2 + t * 1.6) * loc.scale;
+                foliage.castShadow = true;
+                tree.add(foliage);
+            }
+
+            tree.position.set(loc.x, 0, loc.z);
+            group.add(tree);
+        });
+
+        // 5. Park Benches (Placed at edge for park feel)
+        const benchAngles = [Math.PI * 0.25, Math.PI * 0.75, -Math.PI * 0.75, -Math.PI * 0.25];
+        benchAngles.forEach(ang => {
+            const bx = Math.cos(ang) * 31;
+            const bz = Math.sin(ang) * 31;
+            const bench = new THREE.Group();
+
+            // Seat
+            const seat = new THREE.Mesh(
+                new THREE.BoxGeometry(4, 0.2, 1.2),
+                new THREE.MeshStandardMaterial({ color: 0x92400e })
+            );
+            seat.position.y = 0.9;
+            bench.add(seat);
+
+            // Backrest
+            const back = new THREE.Mesh(
+                new THREE.BoxGeometry(4, 1.0, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x92400e })
+            );
+            back.position.set(0, 1.6, -0.5);
+            bench.add(back);
+
+            // Legs
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x334155 });
+            const legGeo = new THREE.BoxGeometry(0.2, 0.9, 1.2);
+            const legL = new THREE.Mesh(legGeo, legMat);
+            legL.position.set(-1.6, 0.45, 0);
+            const legR = new THREE.Mesh(legGeo, legMat);
+            legR.position.set(1.6, 0.45, 0);
+            bench.add(legL);
+            bench.add(legR);
+
+            bench.position.set(bx, 0, bz);
+            bench.lookAt(0, 0, 0);
+            group.add(bench);
+        });
+
+        // 6. Playground Swing Set (positioned at x = -30, z = 0)
+        const swingSet = new THREE.Group();
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3 }); // bright blue
+        const frameBarGeo = new THREE.CylinderGeometry(0.15, 0.15, 7, 12);
+        
+        // A-frame left
+        const aL1 = new THREE.Mesh(frameBarGeo, metalMat);
+        aL1.position.set(-3, 3, 1.2);
+        aL1.rotation.x = 0.35;
+        const aL2 = new THREE.Mesh(frameBarGeo, metalMat);
+        aL2.position.set(-3, 3, -1.2);
+        aL2.rotation.x = -0.35;
+        swingSet.add(aL1);
+        swingSet.add(aL2);
+
+        // A-frame right
+        const aR1 = new THREE.Mesh(frameBarGeo, metalMat);
+        aR1.position.set(3, 3, 1.2);
+        aR1.rotation.x = 0.35;
+        const aR2 = new THREE.Mesh(frameBarGeo, metalMat);
+        aR2.position.set(3, 3, -1.2);
+        aR2.rotation.x = -0.35;
+        swingSet.add(aR1);
+        swingSet.add(aR2);
+
+        // Top beam
+        const topBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 7, 12), metalMat);
+        topBeam.rotation.z = Math.PI / 2;
+        topBeam.position.set(0, 5.8, 0);
+        swingSet.add(topBeam);
+
+        // Swings (2 seats)
+        [-1.3, 1.3].forEach(sx => {
+            const seat = new THREE.Mesh(
+                new THREE.BoxGeometry(1.2, 0.15, 0.5),
+                new THREE.MeshStandardMaterial({ color: 0xef4444 })
+            );
+            seat.position.set(sx, 1.2, 0);
+            swingSet.add(seat);
+
+            const chainMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
+            const chainGeo = new THREE.CylinderGeometry(0.03, 0.03, 4.5);
+            const chainL = new THREE.Mesh(chainGeo, chainMat);
+            chainL.position.set(sx - 0.5, 3.5, 0);
+            const chainR = new THREE.Mesh(chainGeo, chainMat);
+            chainR.position.set(sx + 0.5, 3.5, 0);
+            swingSet.add(chainL);
+            swingSet.add(chainR);
+        });
+
+        swingSet.position.set(-32, 0, 0);
+        swingSet.lookAt(0, 0, 0);
+        group.add(swingSet);
+
+        // 7. Playground Slide (positioned at x = 32, z = 0)
+        const slideGroup = new THREE.Group();
+        const slideMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 }); // yellow slide
+        const slideRamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.2, 7), slideMat);
+        slideRamp.position.set(0, 2.5, 1.5);
+        slideRamp.rotation.x = -Math.PI / 5;
+        slideGroup.add(slideRamp);
+
+        // Platform & Ladder
+        const platform = new THREE.Mesh(new THREE.BoxGeometry(2, 0.2, 2), slideMat);
+        platform.position.set(0, 4.5, -1.8);
+        slideGroup.add(platform);
+
+        const legSlideMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+        const postGeo = new THREE.CylinderGeometry(0.12, 0.12, 4.6);
+        [-0.8, 0.8].forEach(px => {
+            [-2.6, -1.0].forEach(pz => {
+                const post = new THREE.Mesh(postGeo, legSlideMat);
+                post.position.set(px, 2.3, pz);
+                slideGroup.add(post);
+            });
+        });
+
+        slideGroup.position.set(32, 0, 0);
+        slideGroup.lookAt(0, 0, 0);
+        group.add(slideGroup);
+
+        return group;
+    }
+
     setupEnvironment() {
         if(!this.scene) return;
-        const envGroup = new THREE.Group();
+
+        // 1. Mingle Game Arena (outer floor, center base, and 12 guards)
+        const mingleGroup = new THREE.Group();
 
         const outerFloorGeo = new THREE.RingGeometry(18.5, 40, 64);
         const outerFloorMat = new THREE.MeshStandardMaterial({ color: 0xebd5b3, roughness: 0.9 });
@@ -925,13 +1192,13 @@ class ThreeManager {
         outerFloor.rotation.x = -Math.PI / 2;
         outerFloor.position.y = -0.5; 
         outerFloor.receiveShadow = true;
-        envGroup.add(outerFloor);
+        mingleGroup.add(outerFloor);
         
         const centerBaseGeo = new THREE.CylinderGeometry(18.5, 18.5, 0.9, 64);
         const centerBaseMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
         const centerBase = new THREE.Mesh(centerBaseGeo, centerBaseMat);
         centerBase.position.y = -0.95;
-        envGroup.add(centerBase);
+        mingleGroup.add(centerBase);
 
         this.guards = [];
         const numGuards = 12;
@@ -942,11 +1209,13 @@ class ThreeManager {
             const isLeader = (i === 0 || i === 6);
             const guard = this.createGuard(shape, angle, radius, isLeader);
             this.guards.push(guard);
-            envGroup.add(guard);
+            mingleGroup.add(guard);
         }
 
-        this.scene.add(envGroup);
+        this.scene.add(mingleGroup);
+        this.mingleEnvGroup = mingleGroup;
 
+        // 2. Mingle Inner Rotating Platform
         const innerPlatformGroup = new THREE.Group();
         const innerFloorGeo = new THREE.CylinderGeometry(18, 18, 1, 64);
         const innerFloorMat = new THREE.MeshStandardMaterial({ color: 0xebd5b3, roughness: 0.9 });
@@ -964,16 +1233,138 @@ class ThreeManager {
         
         this.scene.add(innerPlatformGroup);
         this.innerPlatform = innerPlatformGroup;
+
+        // 3. Tag Playground Environment (Grass, playground, trees, benches, cones)
+        const tagGroup = this.createPlaygroundEnvironment();
+        this.scene.add(tagGroup);
+        this.tagEnvGroup = tagGroup;
+
+        // Set initial visibility based on gameType
+        if (this.gameType === 'tag') {
+            this.mingleEnvGroup.visible = false;
+            this.innerPlatform.visible = false;
+            this.tagEnvGroup.visible = true;
+        } else {
+            this.mingleEnvGroup.visible = true;
+            this.innerPlatform.visible = true;
+            this.tagEnvGroup.visible = false;
+        }
     }
 
-    
+    updateCameraFraming(immediate = false) {
+        if (!this.camera) return;
+        const container = document.getElementById(this.containerId);
+        const width = container?.clientWidth || window.innerWidth;
+        const height = container?.clientHeight || Math.round(window.innerHeight * 0.85);
+        const aspect = width / Math.max(1, height);
+
+        if (this.gameType === 'tag') {
+            // Precise camera matching the user's reference view:
+            // Centered overview looking down into the ring, perfectly showing the whole playground
+            const aspectScale = aspect < 1.65 ? 1.65 / Math.max(0.65, aspect) : 1.0;
+            const targetX = 0;
+            const targetY = 40 * aspectScale;
+            const targetZ = 48 * aspectScale;
+            const lookTarget = new THREE.Vector3(0, 0, 1.5);
+
+            if (immediate) {
+                this.camera.position.set(targetX, targetY, targetZ);
+                this.camera.lookAt(lookTarget);
+            } else {
+                gsap.killTweensOf(this.camera.position);
+                gsap.to(this.camera.position, {
+                    x: targetX,
+                    y: targetY,
+                    z: targetZ,
+                    duration: 1.0,
+                    ease: "power2.out",
+                    onUpdate: () => {
+                        this.camera?.lookAt(lookTarget);
+                    },
+                    onComplete: () => {
+                        this.camera?.lookAt(lookTarget);
+                    }
+                });
+            }
+        } else {
+            const targetY = Math.max(20, this.currentDoorRadius * 1.2);
+            const targetZ = Math.max(35, this.currentDoorRadius * 1.8);
+            const lookTarget = new THREE.Vector3(0, 0, 0);
+
+            if (immediate) {
+                this.camera.position.set(0, targetY, targetZ);
+                this.camera.lookAt(lookTarget);
+            } else {
+                gsap.killTweensOf(this.camera.position);
+                gsap.to(this.camera.position, {
+                    x: 0,
+                    y: targetY,
+                    z: targetZ,
+                    duration: 1.0,
+                    ease: "power2.out",
+                    onUpdate: () => {
+                        this.camera?.lookAt(lookTarget);
+                    },
+                    onComplete: () => {
+                        this.camera?.lookAt(lookTarget);
+                    }
+                });
+            }
+        }
+    }
+
+    setGameType(type: 'mingle' | 'tag') {
+        this.gameType = type;
+        if (type === 'mingle') {
+            this.tagRoundCount = 0;
+            this.lastCaughtPlayer = null;
+        }
+        if (this.mingleEnvGroup) this.mingleEnvGroup.visible = (type === 'mingle');
+        if (this.tagEnvGroup) this.tagEnvGroup.visible = (type === 'tag');
+        if (this.innerPlatform) this.innerPlatform.visible = (type === 'mingle');
+
+        if (type === 'tag') {
+            // Remove any doors in tag mode
+            this.doors.forEach(d => {
+                if (d.group && d.group.parent) d.group.parent.remove(d.group);
+            });
+            this.doors = [];
+
+            if (this.scene) {
+                this.scene.background = new THREE.Color('#38bdf8'); // bright sunny sky
+                this.scene.fog = new THREE.FogExp2('#38bdf8', 0.005);
+            }
+            if (this.dirLight) {
+                this.dirLight.intensity = 1.15;
+            }
+            if (this.ambientLight) {
+                this.ambientLight.intensity = 0.85;
+            }
+            this.updateCameraFraming(false);
+        } else {
+            if (this.scene) {
+                this.scene.background = new THREE.Color('#87CEEB');
+                this.scene.fog = new THREE.FogExp2('#87CEEB', 0.015);
+            }
+            if (this.dirLight) {
+                this.dirLight.intensity = this.baseLightIntensity;
+            }
+            if (this.ambientLight) {
+                this.ambientLight.intensity = 0.7;
+            }
+            this.updateCameraFraming(false);
+        }
+    }
+
     setupInteraction() {
         const container = document.getElementById(this.containerId);
         if(!container) return;
 
         this.clickHandler = (event: MouseEvent) => {
-            if (!this.camera || !this.innerPlatform) return;
-            
+            if (!this.camera) return;
+            if (this.gameType === 'tag') return;
+
+            if (!this.innerPlatform) return;
             const rect = container.getBoundingClientRect();
             this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
             this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -990,6 +1381,15 @@ class ThreeManager {
     }
 
     manualSpin() {
+        if (this.gameType === 'tag') {
+            if (this.waitingForSpinResolve) {
+                const resolve = this.waitingForSpinResolve;
+                this.waitingForSpinResolve = null;
+                resolve();
+            }
+            return;
+        }
+
         if (!this.innerPlatform) return;
         
         if (!this.spinTarget || isNaN(this.spinTarget)) {
@@ -1846,6 +2246,11 @@ class ThreeManager {
         });
         this.doors = [];
 
+        // No doors in Tag game mode!
+        if (this.gameType === 'tag') {
+            return;
+        }
+
         const radius = Math.max(20, (numDoors * 8) / (Math.PI * 2));
         this.currentDoorRadius = radius; 
         const angleStep = (Math.PI * 2) / numDoors;
@@ -1916,7 +2321,160 @@ class ThreeManager {
         }
     }
 
-    spawnPlayers(players: string[]) {
+    createTaggerGuard() {
+        const group = new THREE.Group();
+        group.rotation.order = 'YXZ';
+
+        const matSuit = new THREE.MeshStandardMaterial({ color: 0xef233c, roughness: 0.7 });
+        const matInnerEar = new THREE.MeshStandardMaterial({ color: 0xfba1b7, roughness: 0.6 });
+        const matMask = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.35 });
+        const matWhite = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const matBlack = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.5 });
+        const matBuckle = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.85, roughness: 0.2 });
+        const matGlove = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.6 });
+
+        // Chubby torso
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 1.15, 1.6, 24), matSuit);
+        torso.position.y = 1.15;
+        torso.castShadow = true;
+        group.add(torso);
+
+        // Center zipper
+        const zipper = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 0.08), matBlack);
+        zipper.position.set(0, 1.15, 1.05);
+        group.add(zipper);
+
+        // Belt & buckle
+        const belt = new THREE.Mesh(new THREE.CylinderGeometry(1.17, 1.17, 0.22, 24), matBlack);
+        belt.position.y = 0.85;
+        group.add(belt);
+
+        const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.26, 0.12), matBuckle);
+        buckle.position.set(0, 0.85, 1.18);
+        group.add(buckle);
+
+        // Side pouches
+        const pouchL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.28), matBlack);
+        pouchL.position.set(-1.18, 0.85, 0);
+        const pouchR = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.28), matBlack);
+        pouchR.position.set(1.18, 0.85, 0);
+        group.add(pouchL, pouchR);
+
+        // Cute tail
+        const tail = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), matSuit);
+        tail.position.set(0, 0.7, -1.15);
+        group.add(tail);
+
+        // Head Group
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 2.5, 0);
+
+        const hood = new THREE.Mesh(new THREE.SphereGeometry(0.95, 24, 24), matSuit);
+        hood.castShadow = true;
+        headGroup.add(hood);
+
+        // Mask
+        const mask = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.95, 24), matMask);
+        mask.rotation.x = Math.PI / 2;
+        mask.position.set(0, -0.05, 0.42);
+        headGroup.add(mask);
+
+        // Triangle emblem on mask (Squid Game Soldier)
+        const triShape = new THREE.Shape();
+        triShape.moveTo(0, 0.22);
+        triShape.lineTo(0.2, -0.16);
+        triShape.lineTo(-0.2, -0.16);
+        triShape.closePath();
+        const triGeo = new THREE.ShapeGeometry(triShape);
+        const emblem = new THREE.Mesh(triGeo, matWhite);
+        emblem.position.set(0, 0.05, 1.1);
+        headGroup.add(emblem);
+
+        // Hamster Ears
+        [-0.72, 0.72].forEach((x) => {
+            const earGroup = new THREE.Group();
+            earGroup.position.set(x, 0.75, 0.05);
+            earGroup.rotation.z = x > 0 ? -0.28 : 0.28;
+            earGroup.rotation.x = -0.12;
+
+            const outerEar = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 16), matSuit);
+            outerEar.scale.set(1, 1, 0.45);
+            earGroup.add(outerEar);
+
+            const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 14), matInnerEar);
+            innerEar.scale.set(1, 1, 0.3);
+            innerEar.position.z = 0.1;
+            earGroup.add(innerEar);
+
+            headGroup.add(earGroup);
+        });
+
+        group.add(headGroup);
+
+        // Dynamic arms for running & catching
+        const armGeo = new THREE.BoxGeometry(0.4, 1.1, 0.4);
+        armGeo.translate(0, -0.55, 0);
+
+        const createArm = (isLeft: boolean) => {
+            const armGroup = new THREE.Group();
+            const sleeve = new THREE.Mesh(armGeo, matSuit);
+            sleeve.castShadow = true;
+            armGroup.add(sleeve);
+
+            const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.42), matBlack);
+            cuff.position.set(0, -1.1, 0);
+            armGroup.add(cuff);
+
+            const glove = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.32, 0.36), matGlove);
+            glove.position.set(0, -1.25, 0);
+            glove.castShadow = true;
+            armGroup.add(glove);
+
+            armGroup.position.set(isLeft ? -1.05 : 1.05, 1.85, 0);
+            return armGroup;
+        };
+
+        const armL = createArm(true);
+        const armR = createArm(false);
+        group.add(armL, armR);
+
+        // Running legs
+        const legGeo = new THREE.BoxGeometry(0.5, 1.2, 0.5);
+        legGeo.translate(0, -0.6, 0);
+
+        const createLeg = (isLeft: boolean) => {
+            const legGroup = new THREE.Group();
+            const pants = new THREE.Mesh(legGeo, matSuit);
+            pants.castShadow = true;
+            legGroup.add(pants);
+
+            const boot = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.35, 0.72), matBlack);
+            boot.position.set(0, -1.25, 0.08);
+            boot.castShadow = true;
+            legGroup.add(boot);
+
+            legGroup.position.set(isLeft ? -0.42 : 0.42, 0.4, 0);
+            return legGroup;
+        };
+
+        const legLGroup = createLeg(true);
+        const legRGroup = createLeg(false);
+        group.add(legLGroup, legRGroup);
+
+        group.userData = {
+            name: '__GUARD__',
+            isAlive: true,
+            isMoving: false,
+            moveTime: 0,
+            behavior: 'normal',
+            parts: { head: headGroup, torso, armL, armR, legLGroup, legRGroup },
+            isCustomArmAnim: false
+        };
+
+        return group;
+    }
+
+    spawnPlayers(players: string[], designatedIT?: string) {
         Object.values(this.characters).forEach((c: any) => {
             if (c && c.parent) c.parent.remove(c);
         });
@@ -1924,6 +2482,138 @@ class ThreeManager {
         if(this.labelContainer) this.labelContainer.innerHTML = '';
         this.labels = {};
 
+        // In Tag Game: IT is placed in front (z = 17) and other players in the far opposite arc!
+        if (this.gameType === 'tag') {
+            const isFirstGame = (this.tagRoundCount === 0 || !this.lastCaughtPlayer);
+            let itName = '';
+
+            if (isFirstGame) {
+                // First game: IT is NOT a player, it is the Squid Guard!
+                itName = '__GUARD__';
+                this.itPlayerName = '__GUARD__';
+
+                const guardChar = this.createTaggerGuard();
+                guardChar.position.set(0, 1, 17);
+                guardChar.lookAt(0, 1, -10);
+                if (this.scene) this.scene.add(guardChar);
+                this.characters['__GUARD__'] = guardChar;
+
+                if (this.labelContainer) {
+                    const label = document.createElement('div');
+                    label.className = 'character-label tag-it-label';
+                    label.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT (TAGGER)</span> <span style="color:#f87171">SQUID GUARD</span>`;
+                    label.style.position = 'absolute';
+                    label.style.background = 'rgba(15, 23, 42, 0.9)';
+                    label.style.border = '2px solid #ef4444';
+                    label.style.color = 'white';
+                    label.style.padding = '3px 10px';
+                    label.style.borderRadius = '8px';
+                    label.style.fontFamily = "'Fredoka', sans-serif";
+                    label.style.fontSize = '14px';
+                    label.style.fontWeight = '700';
+                    label.style.pointerEvents = 'none';
+                    label.style.transform = 'translate(-50%, -100%)';
+                    label.style.zIndex = '10';
+                    label.style.whiteSpace = 'nowrap';
+                    label.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
+                    this.labelContainer.appendChild(label);
+                    this.labels['__GUARD__'] = label;
+                }
+            } else {
+                // Second game onwards: IT is the player caught in the previous round!
+                itName = designatedIT || this.lastCaughtPlayer || (players.length > 0 ? players[0] : '');
+                this.itPlayerName = itName;
+
+                if (itName) {
+                    const itNumberStr = getPlayerNumber(itName);
+                    const itChar = this.createCharacter(itName, itNumberStr);
+                    itChar.position.set(0, 1, 17);
+                    itChar.lookAt(0, 1, -10);
+                    itChar.userData.isAlive = true;
+                    itChar.userData.isMoving = false;
+                    if (this.scene) this.scene.add(itChar);
+                    this.characters[itName] = itChar;
+
+                    if (this.labelContainer) {
+                        const label = document.createElement('div');
+                        label.className = 'character-label tag-it-label';
+                        label.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT (CAUGHT)</span> <span style="color:#f87171">#${itNumberStr}</span> ${itName}`;
+                        label.style.position = 'absolute';
+                        label.style.background = 'rgba(15, 23, 42, 0.9)';
+                        label.style.border = '2px solid #ef4444';
+                        label.style.color = 'white';
+                        label.style.padding = '3px 10px';
+                        label.style.borderRadius = '8px';
+                        label.style.fontFamily = "'Fredoka', sans-serif";
+                        label.style.fontSize = '14px';
+                        label.style.fontWeight = '700';
+                        label.style.pointerEvents = 'none';
+                        label.style.transform = 'translate(-50%, -100%)';
+                        label.style.zIndex = '10';
+                        label.style.whiteSpace = 'nowrap';
+                        label.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
+                        this.labelContainer.appendChild(label);
+                        this.labels[itName] = label;
+                    }
+                }
+            }
+
+            // Spawn other players (runners) in the far opposite side of the circle (negative Z)
+            const otherPlayers = isFirstGame ? players : players.filter(p => p !== itName);
+            const nOthers = otherPlayers.length;
+
+            for (let i = 0; i < nOthers; i++) {
+                const name = otherPlayers[i];
+                const numberStr = getPlayerNumber(name);
+                const char = this.createCharacter(name, numberStr);
+
+                // Spread in the far opposite region: angles in negative Z arc
+                const minAngle = Math.PI * 0.68;
+                const maxAngle = Math.PI * 1.32;
+                const angle = nOthers > 1 
+                    ? minAngle + (maxAngle - minAngle) * (i / (nOthers - 1))
+                    : Math.PI;
+
+                const radius = 10 + ((i % 3) * 4.5);
+                const px = Math.cos(angle) * radius;
+                const pz = Math.sin(angle) * radius; // strictly negative Z, far opposite IT!
+
+                char.position.set(px, 1, pz);
+                char.lookAt(0, 1, 10); // looking toward IT and center
+                char.userData.isAlive = true;
+                char.userData.isMoving = false;
+
+                if (this.scene) this.scene.add(char);
+                this.characters[name] = char;
+
+                if (this.labelContainer) {
+                    const label = document.createElement('div');
+                    label.className = 'character-label';
+                    label.innerHTML = `<span style="color:#10b981">#${numberStr}</span> ${name}`;
+                    label.style.position = 'absolute';
+                    label.style.background = 'rgba(15, 23, 42, 0.85)';
+                    label.style.border = '2px solid #10b981';
+                    label.style.color = 'white';
+                    label.style.padding = '2px 8px';
+                    label.style.borderRadius = '8px';
+                    label.style.fontFamily = "'Fredoka', sans-serif";
+                    label.style.fontSize = '14px';
+                    label.style.fontWeight = '600';
+                    label.style.pointerEvents = 'none';
+                    label.style.transform = 'translate(-50%, -100%)';
+                    label.style.zIndex = '5';
+                    label.style.whiteSpace = 'nowrap';
+                    label.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
+                    this.labelContainer.appendChild(label);
+                    this.labels[name] = label;
+                }
+            }
+
+            this.updateCameraFraming(false);
+            return;
+        }
+
+        // Mingle game standard concentric rings placement
         let currentRing = 0;
         let playersPlaced = 0;
         let baseRadius = 5;
@@ -1996,7 +2686,7 @@ class ThreeManager {
             const label = this.labels[name];
             if(!char || !label) return;
 
-            if(char.userData.isAlive) {
+            if(char.userData.isAlive || char.userData.wasTagged) {
                 const vector = new THREE.Vector3();
                 char.getWorldPosition(vector);
                 vector.y += 4.5; 
@@ -2019,9 +2709,366 @@ class ThreeManager {
             }
         });
     }
-    
+
+    async playTagRound(roundData: any) {
+        if(!globalAudio) return;
+        this.currentRoundData = roundData;
+        this.updateCameraFraming(false);
+        
+        // 1. Determine IT: Round 1 is strictly the Squid Guard with NO player names!
+        // Round 2 onwards is the player caught in the preceding round.
+        const isFirstGame = (roundData.roundNum === 1);
+        let itName = '';
+
+        if (isFirstGame) {
+            this.tagRoundCount = 0;
+            this.lastCaughtPlayer = null;
+            itName = '__GUARD__';
+            this.itPlayerName = '__GUARD__';
+            if (!this.characters['__GUARD__']) {
+                const guardChar = this.createTaggerGuard();
+                if (this.scene) this.scene.add(guardChar);
+                this.characters['__GUARD__'] = guardChar;
+            }
+        } else {
+            // Remove the Squid Guard from round 1 so only player is IT
+            if (this.characters['__GUARD__']) {
+                if (this.scene) this.scene.remove(this.characters['__GUARD__']);
+                if (this.labels['__GUARD__']) {
+                    this.labels['__GUARD__'].remove();
+                    delete this.labels['__GUARD__'];
+                }
+                delete this.characters['__GUARD__'];
+            }
+
+            itName = this.lastCaughtPlayer || (roundData.activePlayers.length > 0 ? roundData.activePlayers[0] : '');
+            this.itPlayerName = itName;
+
+            if (!this.characters[itName]) {
+                const itNumStr = getPlayerNumber(itName);
+                const caughtChar = this.createCharacter(itName, itNumStr);
+                if (this.scene) this.scene.add(caughtChar);
+                this.characters[itName] = caughtChar;
+            }
+        }
+
+        const itChar = this.characters[itName];
+        if (itChar) {
+            itChar.position.set(0, 1, 17);
+            itChar.rotation.set(0, 0, 0);
+            itChar.lookAt(0, 1, -10);
+            itChar.userData.isAlive = true;
+            itChar.userData.isMoving = false;
+            itChar.userData.isCustomArmAnim = false;
+        }
+
+        // Place other players in the far opposite side of the circle
+        const others = isFirstGame ? roundData.activePlayers : roundData.activePlayers.filter((p: string) => p !== itName);
+        others.forEach((name: string, i: number) => {
+            const c = this.characters[name];
+            if (c) {
+                const minAngle = Math.PI * 0.68;
+                const maxAngle = Math.PI * 1.32;
+                const angle = others.length > 1 ? minAngle + (maxAngle - minAngle) * (i / (others.length - 1)) : Math.PI;
+                const r = 11 + ((i % 3) * 4.2);
+                const px = Math.cos(angle) * r;
+                const pz = Math.sin(angle) * r;
+                c.position.set(px, 1, pz);
+                c.rotation.set(0, 0, 0);
+                c.lookAt(0, 1, 10);
+                c.userData.isAlive = true;
+                c.userData.isMoving = false;
+                c.userData.wasTagged = false;
+                c.userData.isCustomArmAnim = false;
+            }
+        });
+
+        // Set labels and state - NO "CLICK TO UNLEASH" banner, NO player names on Squid Guard!
+        const itNum = isFirstGame ? 'GUARD' : getPlayerNumber(itName);
+
+        const itLabel = this.labels[itName];
+        if (itLabel) {
+            if (isFirstGame) {
+                // Round 1: strictly SQUID GUARD with no player names
+                itLabel.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT</span> <span style="color:#f87171">SQUID GUARD</span>`;
+            } else {
+                itLabel.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT</span> <span style="color:#f87171">#${itNum}</span> ${itName}`;
+            }
+        }
+
+        const bannerMsg = isFirstGame 
+            ? 'ROUND 1 • SQUID GUARD IS CHASING!' 
+            : `ROUND ${roundData.roundNum} • #${itNum} ${itName} IS CHASING!`;
+
+        this.onStateChange({ 
+            phase: 'DOORS', 
+            round: roundData.roundNum, 
+            msg: bannerMsg 
+        });
+
+        // Brief 1.2s anticipation pause, then IT automatically starts chasing!
+        await new Promise(r => setTimeout(r, 1200));
+
+        // Evasion loop: players run avoiding IT, strictly staying inside the circle!
+        let evasionActive = true;
+        const circleMaxRadius = 22.5;
+
+        const evasionLoop = () => {
+            if (!evasionActive) return;
+            const itPos = itChar ? itChar.position : new THREE.Vector3(0, 1, 0);
+
+            others.forEach((name: string, idx: number) => {
+                const c = this.characters[name];
+                if (!c || !c.userData.isAlive) return;
+
+                c.userData.isMoving = true;
+                c.userData.moveTime = (c.userData.moveTime || 0) + 0.05;
+
+                const awayDir = new THREE.Vector2(c.position.x - itPos.x, c.position.z - itPos.z);
+                awayDir.normalize();
+
+                const perpDir = new THREE.Vector2(-awayDir.y, awayDir.x);
+                const dodgeOffset = Math.sin(Date.now() * 0.005 + idx * 2.2) * 0.35;
+                const moveVec = awayDir.clone().multiplyScalar(0.24).add(perpDir.clone().multiplyScalar(dodgeOffset));
+
+                let newX = c.position.x + moveVec.x;
+                let newZ = c.position.z + moveVec.y;
+
+                const currentDistFromCenter = Math.sqrt(newX * newX + newZ * newZ);
+                if (currentDistFromCenter > circleMaxRadius) {
+                    const angle = Math.atan2(newZ, newX);
+                    newX = Math.cos(angle) * circleMaxRadius;
+                    newZ = Math.sin(angle) * circleMaxRadius;
+                }
+
+                c.lookAt(newX + moveVec.x * 2, 1, newZ + moveVec.y * 2);
+                c.position.x = newX;
+                c.position.z = newZ;
+            });
+
+            requestAnimationFrame(evasionLoop);
+        };
+        requestAnimationFrame(evasionLoop);
+
+        // IT catches designated target(s)
+        let targetsToCatch: string[] = roundData.eliminated.filter((name: string) => name !== itName);
+        if (targetsToCatch.length === 0 && others.length > 0) {
+            targetsToCatch = [others[Math.floor(Math.random() * others.length)]];
+        }
+
+        for (let tIdx = 0; tIdx < targetsToCatch.length; tIdx++) {
+            const victimName = targetsToCatch[tIdx];
+            const victimChar = this.characters[victimName];
+            const victimNum = getPlayerNumber(victimName);
+
+            if (!victimChar || !itChar) continue;
+
+            itChar.userData.isMoving = true;
+
+            await new Promise<void>((resolveCatch) => {
+                const chaseStart = Date.now();
+                let hasTriggeredCloseUp = false;
+
+                const chaseInterval = setInterval(() => {
+                    if (!itChar || !victimChar) {
+                        clearInterval(chaseInterval);
+                        resolveCatch();
+                        return;
+                    }
+
+                    itChar.userData.moveTime = (itChar.userData.moveTime || 0) + 0.08;
+
+                    const targetX = victimChar.position.x;
+                    const targetZ = victimChar.position.z;
+                    const dx = targetX - itChar.position.x;
+                    const dz = targetZ - itChar.position.z;
+                    const dist = Math.sqrt(dx * dx + dz * dz);
+
+                    itChar.lookAt(targetX, 1, targetZ);
+
+                    // Camera close-up swoop when about to be caught!
+                    if (dist < 6.5 && !hasTriggeredCloseUp) {
+                        hasTriggeredCloseUp = true;
+                        if (this.camera) {
+                            const normDx = dx / dist;
+                            const normDz = dz / dist;
+                            const closeCamX = victimChar.position.x - normDz * 4.2 - normDx * 1.5;
+                            const closeCamZ = victimChar.position.z + normDx * 4.2 - normDz * 1.5;
+                            const closeCamY = 2.4;
+                            gsap.killTweensOf(this.camera.position);
+                            gsap.to(this.camera.position, {
+                                x: closeCamX,
+                                y: closeCamY,
+                                z: closeCamZ,
+                                duration: 0.65,
+                                ease: "power2.out",
+                                onUpdate: () => {
+                                    this.camera?.lookAt(victimChar.position.x, 1.3, victimChar.position.z);
+                                }
+                            });
+                        }
+                    }
+
+                    // IT reaches arms forward to touch/catch the player
+                    if (dist < 3.2 && dist > 1.35) {
+                        if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
+                            itChar.userData.isCustomArmAnim = true;
+                            gsap.to(itChar.userData.parts.armR.rotation, {
+                                x: -Math.PI * 0.72,
+                                z: -0.22,
+                                duration: 0.18,
+                                overwrite: "auto"
+                            });
+                            gsap.to(itChar.userData.parts.armL.rotation, {
+                                x: -Math.PI * 0.70,
+                                z: 0.22,
+                                duration: 0.18,
+                                overwrite: "auto"
+                            });
+                        }
+                        if (itChar.userData.parts?.torso) {
+                            gsap.to(itChar.userData.parts.torso.rotation, {
+                                x: 0.32,
+                                duration: 0.18,
+                                overwrite: "auto"
+                            });
+                        }
+                    }
+
+                    const speed = 0.52;
+                    if (dist > 1.35 && Date.now() - chaseStart < 4500) {
+                        itChar.position.x += (dx / dist) * speed;
+                        itChar.position.z += (dz / dist) * speed;
+                    } else {
+                        // Contact! TOUCH / CATCH!
+                        clearInterval(chaseInterval);
+
+                        // Physical hand tap/touch impact
+                        if (itChar.userData.parts?.armR) {
+                            gsap.to(itChar.userData.parts.armR.position, {
+                                z: 0.35,
+                                duration: 0.1,
+                                yoyo: true,
+                                repeat: 1
+                            });
+                        }
+
+                        globalAudio?.play('boom', 420);
+                        globalAudio?.play('pop', 350);
+
+                        victimChar.userData.isAlive = false;
+                        victimChar.userData.wasTagged = true;
+                        victimChar.userData.isMoving = false;
+
+                        // Victim physical reaction to being touched: arms fly up in shock
+                        if (victimChar.userData.parts) {
+                            victimChar.userData.isCustomArmAnim = true;
+                            gsap.to(victimChar.userData.parts.armL.rotation, { x: -Math.PI * 0.85, z: -0.25, duration: 0.2 });
+                            gsap.to(victimChar.userData.parts.armR.rotation, { x: -Math.PI * 0.85, z: 0.25, duration: 0.2 });
+                        }
+
+                        // Victim stumbles forward from touch impact
+                        gsap.to(victimChar.position, {
+                            x: victimChar.position.x + (dx / dist) * 0.75,
+                            z: victimChar.position.z + (dz / dist) * 0.75,
+                            duration: 0.25,
+                            ease: "power1.out"
+                        });
+
+                        // Victim sits down on turf
+                        gsap.to(victimChar.position, {
+                            y: 0.4,
+                            duration: 0.4,
+                            delay: 0.15,
+                            ease: "bounce.out"
+                        });
+                        gsap.to(victimChar.rotation, {
+                            z: Math.PI / 2.2,
+                            y: victimChar.rotation.y + 0.4,
+                            duration: 0.4,
+                            delay: 0.15
+                        });
+
+                        const vLabel = this.labels[victimName];
+                        if (vLabel) {
+                            vLabel.innerHTML = `<span style="background:#e11d48; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 12px rgba(225,29,72,0.8);">💥 CAUGHT!</span> <span style="color:#fda4af">#${victimNum}</span> ${victimName}`;
+                            vLabel.style.border = '2px solid #e11d48';
+                            vLabel.style.boxShadow = '0 0 15px rgba(225,29,72,0.8)';
+                        }
+
+                        // Store this caught player as the IT for the NEXT game round!
+                        this.lastCaughtPlayer = victimName;
+                        this.tagRoundCount++;
+
+                        this.onStateChange({
+                            phase: 'ELIMINATED',
+                            msg: `#${victimNum} ${victimName} WAS CAUGHT!`,
+                            eliminatedThisRound: targetsToCatch.slice(0, tIdx + 1)
+                        });
+
+                        // Hold close camera framing for 1.1s so user enjoys the dramatic catch
+                        setTimeout(() => {
+                            // Smoothly restore wide arena framing
+                            this.updateCameraFraming(false);
+                            if (itChar.userData.parts?.torso) {
+                                gsap.to(itChar.userData.parts.torso.rotation, { x: 0, duration: 0.4 });
+                            }
+                            itChar.userData.isCustomArmAnim = false;
+                            victimChar.userData.isCustomArmAnim = false;
+                            resolveCatch();
+                        }, 1100);
+                    }
+                }, 30);
+            });
+        }
+
+        // Stop evasion movement
+        evasionActive = false;
+        if (itChar) itChar.userData.isMoving = false;
+
+        // Survivors celebrate escaping!
+        roundData.survivors.forEach((sName: string) => {
+            const sChar = this.characters[sName];
+            if (sChar && sChar.userData.isAlive) {
+                sChar.userData.isMoving = false;
+                sChar.lookAt(0, 1, 0);
+                gsap.to(sChar.position, {
+                    y: 2.2,
+                    duration: 0.25,
+                    yoyo: true,
+                    repeat: 3,
+                    ease: "power1.out"
+                });
+            }
+        });
+
+        // IT victory hop
+        if (itChar) {
+            gsap.to(itChar.position, {
+                y: 2.5,
+                duration: 0.3,
+                yoyo: true,
+                repeat: 3,
+                ease: "power1.out"
+            });
+        }
+
+        await new Promise(r => setTimeout(r, 2200));
+
+        this.onStateChange({
+            phase: 'IDLE',
+            msg: `${roundData.survivors.length} PLAYERS ESCAPED!`,
+            eliminatedThisRound: roundData.eliminated
+        });
+
+        await new Promise(r => setTimeout(r, 1500));
+    }
+
     async playRound(roundData: any) {
         if(!globalAudio) return;
+        if (this.gameType === 'tag') {
+            return this.playTagRound(roundData);
+        }
         this.currentRoundData = roundData;
         this.createDoors(roundData.numDoors);
         
@@ -2300,12 +3347,22 @@ class ThreeManager {
 
     async playWinnerSequence(chosenOnes: string[], mode: string) {
         if(!globalAudio) return;
-        this.onStateChange({ phase: 'WINNER', msg: mode === 'picker' ? 'ELIMINATION COMPLETE' : 'SOLE SURVIVOR' });
+        const winnerMsg = this.gameType === 'tag'
+            ? (mode === 'picker' ? (chosenOnes.length > 1 ? 'PLAYERS CAUGHT' : 'PLAYER CAUGHT') : 'SOLE SURVIVOR • ESCAPED ALL TAGS!')
+            : (mode === 'picker' ? 'ELIMINATION COMPLETE' : 'SOLE SURVIVOR');
+        this.onStateChange({ phase: 'WINNER', msg: winnerMsg });
         
-        gsap.to(this.spotLight, { intensity: 10, duration: 2 });
-        gsap.to(this.ambientLight, { intensity: 0.1, duration: 2 });
-        gsap.to(this.dirLight, { intensity: 0.1, duration: 2 });
-        if(this.scene) this.scene.background = new THREE.Color('#0f172a'); 
+        if (this.gameType === 'tag') {
+            gsap.to(this.spotLight, { intensity: 6, duration: 2 });
+            gsap.to(this.ambientLight, { intensity: 0.6, duration: 2 });
+            gsap.to(this.dirLight, { intensity: 0.8, duration: 2 });
+            if(this.scene) this.scene.background = new THREE.Color('#38bdf8');
+        } else {
+            gsap.to(this.spotLight, { intensity: 10, duration: 2 });
+            gsap.to(this.ambientLight, { intensity: 0.1, duration: 2 });
+            gsap.to(this.dirLight, { intensity: 0.1, duration: 2 });
+            if(this.scene) this.scene.background = new THREE.Color('#0f172a'); 
+        } 
 
         if (mode === 'picker') {
             let centerX = 0, centerZ = 0;
@@ -2370,6 +3427,7 @@ class ThreeManager {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        this.updateCameraFraming(true);
     }
 
     animate() {
@@ -2378,21 +3436,27 @@ class ThreeManager {
         
         const time = Date.now() * 0.001;
         Object.values(this.characters).forEach((char: any) => {
-            if(char && char.userData.isAlive) {
-                char.userData.parts.torso.scale.y = 1 + Math.sin(time * 3 + char.userData.moveTime) * 0.02;
+            if(char && char.userData?.isAlive) {
+                if (char.userData.parts?.torso) {
+                    char.userData.parts.torso.scale.y = 1 + Math.sin(time * 3 + (char.userData.moveTime || 0)) * 0.02;
+                }
                 if(char.userData.isMoving) {
-                    if (char.userData.behavior === 'crawl') {
-                        const crawlSpeed = 10;
-                        char.userData.parts.armL.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed) * 0.35;
-                        char.userData.parts.armR.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed + Math.PI) * 0.35;
-                        char.userData.parts.legLGroup.rotation.x = Math.sin(time * crawlSpeed + Math.PI) * 0.2;
-                        char.userData.parts.legRGroup.rotation.x = Math.sin(time * crawlSpeed) * 0.2;
-                    } else {
-                        const speed = 15;
+                    const speed = 15;
+                    if (char.userData.parts?.legLGroup) {
                         char.userData.parts.legLGroup.rotation.x = Math.sin(time * speed) * 0.6;
+                    }
+                    if (char.userData.parts?.legRGroup) {
                         char.userData.parts.legRGroup.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
-                        char.userData.parts.armL.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
-                        char.userData.parts.armR.rotation.x = Math.sin(time * speed) * 0.6;
+                    }
+                    if (!char.userData.isCustomArmAnim && char.userData.parts?.armL && char.userData.parts?.armR) {
+                        if (char.userData.behavior === 'crawl') {
+                            const crawlSpeed = 10;
+                            char.userData.parts.armL.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed) * 0.35;
+                            char.userData.parts.armR.rotation.x = -Math.PI * 0.72 + Math.sin(time * crawlSpeed + Math.PI) * 0.35;
+                        } else {
+                            char.userData.parts.armL.rotation.x = Math.sin(time * speed + Math.PI) * 0.6;
+                            char.userData.parts.armR.rotation.x = Math.sin(time * speed) * 0.6;
+                        }
                     }
                 }
             }
@@ -2493,6 +3557,63 @@ const StudentManager = ({ students, setStudents, onBack }: any) => {
     );
 };
 
+const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: boolean }) => {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        if (isPlaying) {
+            setMounted(true);
+        }
+    }, [isPlaying]);
+
+    useEffect(() => {
+        if (!iframeRef.current) return;
+        const iframe = iframeRef.current;
+        try {
+            if (isPlaying && !isMuted) {
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'unMute' }), '*');
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [80] }), '*');
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*');
+            } else if (isMuted) {
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*');
+            } else {
+                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*');
+            }
+        } catch {
+            // Ignore cross-origin warnings
+        }
+    }, [isPlaying, isMuted]);
+
+    if (!mounted) return null;
+
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: -9999,
+                left: -9999,
+                width: '320px',
+                height: '240px',
+                pointerEvents: 'none',
+                opacity: 0.001,
+                zIndex: -999
+            }}
+            aria-hidden="true"
+        >
+            <iframe
+                ref={iframeRef}
+                width="320"
+                height="240"
+                src="https://www.youtube-nocookie.com/embed/ENWFOepUlFw?enablejsapi=1&autoplay=1&loop=1&playlist=ENWFOepUlFw&controls=0&disablekb=1&fs=0&playsinline=1"
+                title="Tag Soundtrack"
+                allow="autoplay; encrypted-media"
+                style={{ border: 0 }}
+            />
+        </div>
+    );
+};
+
 interface SquidGamePickerProps {
     onViewChange?: (view: ViewState) => void;
 }
@@ -2538,17 +3659,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             return;
         }
         if(view === 'home' && threeManagerRef.current && gameState.phase === 'IDLE') {
+            threeManagerRef.current.setGameType(activeGame);
             threeManagerRef.current.spawnPlayers(students);
-            if(threeManagerRef.current.camera) {
-                threeManagerRef.current.camera.position.set(0, 20, 35);
-                threeManagerRef.current.camera.lookAt(0,0,0);
-            }
-            if(threeManagerRef.current.ambientLight) threeManagerRef.current.ambientLight.intensity = 0.7;
-            if(threeManagerRef.current.dirLight) threeManagerRef.current.dirLight.intensity = threeManagerRef.current.baseLightIntensity;
-            if(threeManagerRef.current.spotLight) threeManagerRef.current.spotLight.intensity = 0;
-            if(threeManagerRef.current.scene) threeManagerRef.current.scene.background = new THREE.Color('#87CEEB'); 
         }
-    }, [students, view, gameState.phase]);
+    }, [students, view, gameState.phase, activeGame]);
     
     useEffect(() => {
         if (gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0) {
@@ -2575,8 +3689,23 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                 });
             }
         }
-        return () => timeouts.forEach(clearTimeout);
+        return () => {
+            timeouts.forEach(clearTimeout);
+            stopAnnounce();
+        };
     }, [gameState.phase, chosenOnes, gameMode, students, gameState.eliminatedThisRound]);
+
+    useEffect(() => {
+        if (view !== 'game') {
+            stopAnnounce();
+        }
+    }, [view]);
+
+    useEffect(() => {
+        return () => {
+            stopAnnounce();
+        };
+    }, []);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -2627,6 +3756,7 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
     };
 
     const startGameWith = async (roster: string[]) => {
+        stopAnnounce();
         if(roster.length < (gameMode === 'picker' ? pickCount + 1 : 2)) {
             alert(`Need at least ${gameMode === 'picker' ? pickCount + 1 : 2} players for this mode!`);
             setView('home');
@@ -2640,12 +3770,17 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         const tm = threeManagerRef.current;
         if(!tm) return;
         
-        // Spawn players before starting sequence
+        // Reset Tag round state when starting so Round 1 is strictly the Squid Guard!
+        tm.lastCaughtPlayer = null;
+        tm.tagRoundCount = 0;
+        
+        // Spawn players before starting sequence in proper game type
+        tm.setGameType(activeGame);
         tm.spawnPlayers(roster);
-        if(tm.ambientLight) tm.ambientLight.intensity = 0.7;
-        if(tm.dirLight) tm.dirLight.intensity = tm.baseLightIntensity;
+        if(tm.ambientLight) tm.ambientLight.intensity = activeGame === 'tag' ? 0.6 : 0.7;
+        if(tm.dirLight) tm.dirLight.intensity = activeGame === 'tag' ? 0.8 : tm.baseLightIntensity;
         if(tm.spotLight) tm.spotLight.intensity = 0;
-        if(tm.scene) tm.scene.background = new THREE.Color('#87CEEB'); 
+        if(tm.scene) tm.scene.background = new THREE.Color(activeGame === 'tag' ? '#38bdf8' : '#87CEEB'); 
 
         const engine = GameEngine.generateGameSequence(roster, gameMode, pickCount);
         
@@ -2671,6 +3806,7 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
 
     
     const continueGame = () => {
+        stopAnnounce();
         // Remove eliminated players from the students roster
         const remainingStudents = students.filter(s => !chosenOnes.includes(s));
         setStudents(remainingStudents);
@@ -2684,14 +3820,27 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             setView('home');
             setChosenOnes([]);
             setTotalEliminated(0);
+            if (threeManagerRef.current) {
+                threeManagerRef.current.lastCaughtPlayer = null;
+                threeManagerRef.current.tagRoundCount = 0;
+                threeManagerRef.current.setGameType(activeGame);
+                threeManagerRef.current.spawnPlayers(remainingStudents);
+            }
         }
     };
 
     const resetGame = () => {
+        stopAnnounce();
         setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [] });
         setView('home');
         setChosenOnes([]);
         setTotalEliminated(0);
+        if (threeManagerRef.current) {
+            threeManagerRef.current.lastCaughtPlayer = null;
+            threeManagerRef.current.tagRoundCount = 0;
+            threeManagerRef.current.setGameType(activeGame);
+            threeManagerRef.current.spawnPlayers(students);
+        }
     };
 
     const renderHome = () => (
@@ -2795,7 +3944,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                 <div className="flex gap-3 pointer-events-auto">
                     {onViewChange && (
                         <button 
-                            onClick={() => onViewChange('home')}
+                            onClick={() => {
+                                stopAnnounce();
+                                onViewChange('home');
+                            }}
                             className="h-12 px-4 bg-slate-900/90 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
                             title="Back to Studio"
                         >
@@ -2910,7 +4062,14 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         >
             {/* Absolute positioning for the Three.js canvas so it stays under the UI layer and takes full space */}
             <div id="canvas-container" className="absolute inset-0 z-10" />
-            <iframe id="yt-player" className="hidden" src="https://www.youtube.com/embed/SbAKYgfYET8?enablejsapi=1&autoplay=0" allow="autoplay" title="YouTube video player" frameBorder="0"></iframe>
+
+            {/* YouTube Audio Player for Tag Game */}
+            {activeGame === 'tag' && (
+                <TagMusicPlayer
+                    isPlaying={!muteUI && view === 'game'}
+                    isMuted={muteUI}
+                />
+            )}
 
             {/* UI Layer wrapper - must have pointer-events-none so interactions pass through to canvas if needed (except for the sidebar) */}
             <div id="ui-layer" className="absolute inset-0 z-20 flex font-sans text-slate-100 pointer-events-none">
@@ -2945,6 +4104,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                                 onClick={() => {
                                     setActiveGame('mingle');
                                     setView('home');
+                                    if (threeManagerRef.current) {
+                                        threeManagerRef.current.setGameType('mingle');
+                                        threeManagerRef.current.spawnPlayers(students);
+                                    }
                                 }} 
                                 className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'home' && activeGame === 'mingle' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
                                 title="Mingle Game"
@@ -2957,6 +4120,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                                 onClick={() => {
                                     setActiveGame('tag');
                                     setView('home');
+                                    if (threeManagerRef.current) {
+                                        threeManagerRef.current.setGameType('tag');
+                                        threeManagerRef.current.spawnPlayers(students);
+                                    }
                                 }} 
                                 className={`flex items-center gap-4 p-4 rounded-xl transition font-medium ${view === 'home' && activeGame === 'tag' ? 'bg-rose-600/20 text-rose-400 border border-rose-500/30' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
                                 title="Tag"
@@ -2980,7 +4147,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                         <div className="absolute top-6 right-6 z-40 flex items-center gap-3 pointer-events-auto">
                             {onViewChange && (
                                 <button
-                                    onClick={() => onViewChange('home')}
+                                    onClick={() => {
+                                        stopAnnounce();
+                                        onViewChange('home');
+                                    }}
                                     className="h-12 px-4 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
                                     title="Back to Studio"
                                 >
