@@ -4,7 +4,7 @@ import gsap from 'gsap';
 import {
     Users, Play, Check, MousePointerClick, Skull, UserRound, VolumeX,
     Volume2, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList,
-    Maximize, Minimize, ArrowLeft, Tag
+    Maximize, Minimize, ArrowLeft, Tag, Clock, Music
 } from 'lucide-react';
 import { ViewState } from '../types';
 
@@ -851,6 +851,92 @@ class ThreeManager {
     itPlayerName: string = '';
     tagRoundCount: number = 0;
     lastCaughtPlayer: string | null = null;
+    tagTimer: number = 15;
+    activeChaseInterval: any = null;
+    stopEvasion: (() => void) | null = null;
+    currentCamLookAt: THREE.Vector3 = new THREE.Vector3(0, 0, 1.5);
+    tagCamTargetPos: THREE.Vector3 | null = null;
+    tagCamTargetLook: THREE.Vector3 | null = null;
+
+    triggerPlayerTrip(char: any, isVictimSlip: boolean = false) {
+        if (!char || !char.userData || !char.userData.isAlive || char.userData.isFallen || char.userData.wasTagged) return;
+        char.userData.isFallen = true;
+        char.userData.fallState = 'tripping';
+        char.userData.isCustomArmAnim = true;
+
+        const parts = char.userData.parts;
+        // Phase 1: Lurch forward losing balance (0.2s)
+        if (parts?.torso) gsap.to(parts.torso.rotation, { x: 0.55, duration: 0.2, overwrite: 'auto' });
+        if (parts?.head) gsap.to(parts.head.rotation, { x: 0.35, duration: 0.2, overwrite: 'auto' });
+        if (parts?.armL) gsap.to(parts.armL.rotation, { x: -Math.PI * 0.75, z: 0.35, duration: 0.2, overwrite: 'auto' });
+        if (parts?.armR) gsap.to(parts.armR.rotation, { x: -Math.PI * 0.75, z: -0.35, duration: 0.2, overwrite: 'auto' });
+
+        // Phase 2: Fall down flat onto grass/knees (0.35s)
+        gsap.to(char.position, {
+            y: 0.38,
+            duration: 0.35,
+            delay: 0.18,
+            ease: "bounce.out"
+        });
+        const tiltRoll = (Math.random() > 0.5 ? 0.35 : -0.35);
+        gsap.to(char.rotation, {
+            x: Math.PI * 0.42,
+            z: tiltRoll,
+            duration: 0.35,
+            delay: 0.18,
+            ease: "power2.out",
+            onComplete: () => {
+                char.userData.fallState = 'fallen';
+                if (!char.userData.wasTagged) {
+                    const stayDownTime = isVictimSlip ? 750 : 850 + Math.random() * 450;
+                    setTimeout(() => {
+                        if (!char.userData.isAlive || char.userData.wasTagged) return;
+                        char.userData.fallState = 'standing_up';
+
+                        // Phase 3: Push back up and stand up!
+                        gsap.to(char.position, { y: 1.0, duration: 0.45, ease: "power2.out" });
+                        gsap.to(char.rotation, { x: 0, z: 0, duration: 0.45, ease: "power2.out" });
+                        if (parts?.torso) gsap.to(parts.torso.rotation, { x: 0, duration: 0.4 });
+                        if (parts?.head) gsap.to(parts.head.rotation, { x: 0, y: 0, duration: 0.4 });
+                        if (parts?.armL) gsap.to(parts.armL.rotation, { x: 0, z: 0, duration: 0.35 });
+                        if (parts?.armR) gsap.to(parts.armR.rotation, { x: 0, z: 0, duration: 0.35 });
+
+                        setTimeout(() => {
+                            if (!char.userData.isAlive) return;
+                            char.userData.isFallen = false;
+                            char.userData.fallState = 'upright';
+                            char.userData.isCustomArmAnim = false;
+                            char.userData.sprintBoost = 1.45;
+                            setTimeout(() => {
+                                if (char.userData) char.userData.sprintBoost = 1.0;
+                            }, 1500);
+                        }, 480);
+                    }, stayDownTime);
+                }
+            }
+        });
+    }
+
+    setTagTimer(seconds: number) {
+        this.tagTimer = Math.max(5, Math.min(60, seconds));
+    }
+
+    cancelChase() {
+        if (this.activeChaseInterval) {
+            clearInterval(this.activeChaseInterval);
+            this.activeChaseInterval = null;
+        }
+        if (this.stopEvasion) {
+            this.stopEvasion();
+            this.stopEvasion = null;
+        }
+        if (this.onStateChange) {
+            this.onStateChange({ chaseSecondsLeft: undefined, isMusicPlaying: false });
+        }
+        if (this.gameType === 'tag') {
+            this.updateCameraFraming(false);
+        }
+    }
 
     constructor(containerId: string) {
         this.containerId = containerId;
@@ -1267,24 +1353,15 @@ class ThreeManager {
             const targetZ = 48 * aspectScale;
             const lookTarget = new THREE.Vector3(0, 0, 1.5);
 
+            this.tagCamTargetPos = new THREE.Vector3(targetX, targetY, targetZ);
+            this.tagCamTargetLook = lookTarget.clone();
+
+            gsap.killTweensOf(this.camera.position);
+
             if (immediate) {
                 this.camera.position.set(targetX, targetY, targetZ);
+                this.currentCamLookAt.copy(lookTarget);
                 this.camera.lookAt(lookTarget);
-            } else {
-                gsap.killTweensOf(this.camera.position);
-                gsap.to(this.camera.position, {
-                    x: targetX,
-                    y: targetY,
-                    z: targetZ,
-                    duration: 1.0,
-                    ease: "power2.out",
-                    onUpdate: () => {
-                        this.camera?.lookAt(lookTarget);
-                    },
-                    onComplete: () => {
-                        this.camera?.lookAt(lookTarget);
-                    }
-                });
             }
         } else {
             const targetY = Math.max(20, this.currentDoorRadius * 1.2);
@@ -1417,19 +1494,10 @@ class ThreeManager {
                 if (this.waitingForSpinResolve) {
                     this.spinTimeout = setTimeout(() => {
                         if (this.waitingForSpinResolve) {
-                            if (ytPlayer && ytPlayer.contentWindow) {
-                                ytPlayer.contentWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "*");
-                            }
                             this.waitingForSpinResolve();
                             this.waitingForSpinResolve = null;
                         }
                     }, 1000);
-                } else {
-                    setTimeout(() => {
-                        if (ytPlayer && ytPlayer.contentWindow) {
-                            ytPlayer.contentWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "*");
-                        }
-                    }, 500);
                 }
             }
         });
@@ -2497,28 +2565,7 @@ class ThreeManager {
                 guardChar.lookAt(0, 1, -10);
                 if (this.scene) this.scene.add(guardChar);
                 this.characters['__GUARD__'] = guardChar;
-
-                if (this.labelContainer) {
-                    const label = document.createElement('div');
-                    label.className = 'character-label tag-it-label';
-                    label.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT (TAGGER)</span> <span style="color:#f87171">SQUID GUARD</span>`;
-                    label.style.position = 'absolute';
-                    label.style.background = 'rgba(15, 23, 42, 0.9)';
-                    label.style.border = '2px solid #ef4444';
-                    label.style.color = 'white';
-                    label.style.padding = '3px 10px';
-                    label.style.borderRadius = '8px';
-                    label.style.fontFamily = "'Fredoka', sans-serif";
-                    label.style.fontSize = '14px';
-                    label.style.fontWeight = '700';
-                    label.style.pointerEvents = 'none';
-                    label.style.transform = 'translate(-50%, -100%)';
-                    label.style.zIndex = '10';
-                    label.style.whiteSpace = 'nowrap';
-                    label.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
-                    this.labelContainer.appendChild(label);
-                    this.labels['__GUARD__'] = label;
-                }
+                // No floating label on Squid Guard
             } else {
                 // Second game onwards: IT is the player caught in the previous round!
                 itName = designatedIT || this.lastCaughtPlayer || (players.length > 0 ? players[0] : '');
@@ -2539,7 +2586,9 @@ class ThreeManager {
                         label.className = 'character-label tag-it-label';
                         label.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT (CAUGHT)</span> <span style="color:#f87171">#${itNumberStr}</span> ${itName}`;
                         label.style.position = 'absolute';
-                        label.style.background = 'rgba(15, 23, 42, 0.9)';
+                        label.style.left = '0px';
+                        label.style.top = '0px';
+                        label.style.background = 'rgba(15, 23, 42, 0.92)';
                         label.style.border = '2px solid #ef4444';
                         label.style.color = 'white';
                         label.style.padding = '3px 10px';
@@ -2548,7 +2597,10 @@ class ThreeManager {
                         label.style.fontSize = '14px';
                         label.style.fontWeight = '700';
                         label.style.pointerEvents = 'none';
-                        label.style.transform = 'translate(-50%, -100%)';
+                        label.style.willChange = 'transform';
+                        label.style.backfaceVisibility = 'hidden';
+                        (label.style as any).webkitFontSmoothing = 'antialiased';
+                        (label.style as any).textRendering = 'optimizeLegibility';
                         label.style.zIndex = '10';
                         label.style.whiteSpace = 'nowrap';
                         label.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
@@ -2558,7 +2610,7 @@ class ThreeManager {
                 }
             }
 
-            // Spawn other players (runners) in the far opposite side of the circle (negative Z)
+            // Spawn other players (runners) distributed across the playground opposite IT
             const otherPlayers = isFirstGame ? players : players.filter(p => p !== itName);
             const nOthers = otherPlayers.length;
 
@@ -2567,21 +2619,22 @@ class ThreeManager {
                 const numberStr = getPlayerNumber(name);
                 const char = this.createCharacter(name, numberStr);
 
-                // Spread in the far opposite region: angles in negative Z arc
-                const minAngle = Math.PI * 0.68;
-                const maxAngle = Math.PI * 1.32;
-                const angle = nOthers > 1 
-                    ? minAngle + (maxAngle - minAngle) * (i / (nOthers - 1))
-                    : Math.PI;
-
-                const radius = 10 + ((i % 3) * 4.5);
-                const px = Math.cos(angle) * radius;
-                const pz = Math.sin(angle) * radius; // strictly negative Z, far opposite IT!
+                // Natural organic dispersion across the opposite half of the playground
+                const t = nOthers > 1 ? i / (nOthers - 1) : 0.5;
+                const baseAngle = Math.PI * (0.58 + 0.84 * t);
+                const ringTier = i % 4;
+                const baseRadius = ringTier === 0 ? 8.5 : ringTier === 1 ? 13.5 : ringTier === 2 ? 18.0 : 11.0;
+                const r = Math.min(21.0, Math.max(6.5, baseRadius + ((i * 3.7) % 2.5) - 1.25));
+                const px = Math.cos(baseAngle) * r;
+                const pz = Math.sin(baseAngle) * r;
 
                 char.position.set(px, 1, pz);
                 char.lookAt(0, 1, 10); // looking toward IT and center
                 char.userData.isAlive = true;
                 char.userData.isMoving = false;
+                char.userData.isFallen = false;
+                char.userData.fallState = 'upright';
+                char.userData.sprintBoost = 1.0;
 
                 if (this.scene) this.scene.add(char);
                 this.characters[name] = char;
@@ -2591,7 +2644,9 @@ class ThreeManager {
                     label.className = 'character-label';
                     label.innerHTML = `<span style="color:#10b981">#${numberStr}</span> ${name}`;
                     label.style.position = 'absolute';
-                    label.style.background = 'rgba(15, 23, 42, 0.85)';
+                    label.style.left = '0px';
+                    label.style.top = '0px';
+                    label.style.background = 'rgba(15, 23, 42, 0.88)';
                     label.style.border = '2px solid #10b981';
                     label.style.color = 'white';
                     label.style.padding = '2px 8px';
@@ -2600,7 +2655,10 @@ class ThreeManager {
                     label.style.fontSize = '14px';
                     label.style.fontWeight = '600';
                     label.style.pointerEvents = 'none';
-                    label.style.transform = 'translate(-50%, -100%)';
+                    label.style.willChange = 'transform';
+                    label.style.backfaceVisibility = 'hidden';
+                    (label.style as any).webkitFontSmoothing = 'antialiased';
+                    (label.style as any).textRendering = 'optimizeLegibility';
                     label.style.zIndex = '5';
                     label.style.whiteSpace = 'nowrap';
                     label.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
@@ -2644,7 +2702,9 @@ class ThreeManager {
                     label.className = 'character-label';
                     label.innerHTML = `<span style="color:#10b981">#${numberStr}</span> ${name}`;
                     label.style.position = 'absolute';
-                    label.style.background = 'rgba(15, 23, 42, 0.8)';
+                    label.style.left = '0px';
+                    label.style.top = '0px';
+                    label.style.background = 'rgba(15, 23, 42, 0.85)';
                     label.style.border = '2px solid #10b981';
                     label.style.color = 'white';
                     label.style.padding = '2px 8px';
@@ -2653,7 +2713,10 @@ class ThreeManager {
                     label.style.fontSize = '14px';
                     label.style.fontWeight = '600';
                     label.style.pointerEvents = 'none';
-                    label.style.transform = 'translate(-50%, -100%)';
+                    label.style.willChange = 'transform';
+                    label.style.backfaceVisibility = 'hidden';
+                    (label.style as any).webkitFontSmoothing = 'antialiased';
+                    (label.style as any).textRendering = 'optimizeLegibility';
                     label.style.transition = 'opacity 0.3s';
                     label.style.textShadow = '0 2px 4px rgba(0,0,0,0.5)';
                     label.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
@@ -2681,6 +2744,18 @@ class ThreeManager {
     updateLabels() {
         if(!this.camera) return;
         
+        const width = this.renderer?.domElement.clientWidth || window.innerWidth;
+        const height = this.renderer?.domElement.clientHeight || window.innerHeight;
+
+        const visibleItems: Array<{
+            name: string;
+            label: HTMLElement;
+            x: number;
+            y: number;
+            screenZ: number;
+            offsetY: number;
+        }> = [];
+
         Object.keys(this.characters).forEach(name => {
             const char = this.characters[name];
             const label = this.labels[name];
@@ -2689,25 +2764,57 @@ class ThreeManager {
             if(char.userData.isAlive || char.userData.wasTagged) {
                 const vector = new THREE.Vector3();
                 char.getWorldPosition(vector);
-                vector.y += 4.5; 
+                vector.y += (this.gameType === 'tag' ? 4.2 : 4.0); 
                 vector.project(this.camera!);
 
-                const width = this.renderer?.domElement.clientWidth || window.innerWidth;
-                const height = this.renderer?.domElement.clientHeight || window.innerHeight;
-
-                const x = (vector.x * .5 + .5) * width;
-                const y = (vector.y * -.5 + .5) * height;
-
-                if (vector.z > 1) {
+                if (vector.z > 1.0 || vector.x < -1.1 || vector.x > 1.1 || vector.y < -1.1 || vector.y > 1.1) {
                     label.style.opacity = '0';
                 } else {
-                    label.style.opacity = '1';
-                    label.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+                    const screenX = (vector.x * 0.5 + 0.5) * width;
+                    const screenY = (vector.y * -0.5 + 0.5) * height;
+
+                    visibleItems.push({
+                        name,
+                        label,
+                        x: screenX,
+                        y: screenY,
+                        screenZ: vector.z,
+                        offsetY: 0
+                    });
                 }
             } else {
                 label.style.opacity = '0';
             }
         });
+
+        // Anti-overlap collision solver:
+        // Sort visible labels from left to right on screen
+        visibleItems.sort((a, b) => a.x - b.x);
+
+        for (let i = 0; i < visibleItems.length; i++) {
+            const current = visibleItems[i];
+            for (let j = 0; j < i; j++) {
+                const prev = visibleItems[j];
+                const dx = Math.abs(current.x - prev.x);
+                const dy = Math.abs((current.y + current.offsetY) - (prev.y + prev.offsetY));
+                
+                // If two labels would overlap in 2D screen space (within 98px horizontally and 24px vertically):
+                if (dx < 98 && dy < 24) {
+                    current.offsetY = prev.offsetY - 26; // Stagger vertically so names never collide!
+                }
+            }
+        }
+
+        // Apply crisp whole-integer pixel transforms with translate3d
+        for (let i = 0; i < visibleItems.length; i++) {
+            const item = visibleItems[i];
+            const px = Math.round(item.x);
+            const py = Math.round(item.y + item.offsetY);
+            item.label.style.opacity = '1';
+            item.label.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -100%)`;
+            const depthZ = Math.round(2000 - item.screenZ * 1000);
+            item.label.style.zIndex = `${depthZ + (item.offsetY !== 0 ? 50 : 0)}`;
+        }
     }
 
     async playTagRound(roundData: any) {
@@ -2764,15 +2871,17 @@ class ThreeManager {
 
         // Place other players in the far opposite side of the circle
         const others = isFirstGame ? roundData.activePlayers : roundData.activePlayers.filter((p: string) => p !== itName);
+        const nOthers = others.length;
         others.forEach((name: string, i: number) => {
             const c = this.characters[name];
             if (c) {
-                const minAngle = Math.PI * 0.68;
-                const maxAngle = Math.PI * 1.32;
-                const angle = others.length > 1 ? minAngle + (maxAngle - minAngle) * (i / (others.length - 1)) : Math.PI;
-                const r = 11 + ((i % 3) * 4.2);
-                const px = Math.cos(angle) * r;
-                const pz = Math.sin(angle) * r;
+                const t = nOthers > 1 ? i / (nOthers - 1) : 0.5;
+                const baseAngle = Math.PI * (0.58 + 0.84 * t);
+                const ringTier = i % 4;
+                const baseRadius = ringTier === 0 ? 8.5 : ringTier === 1 ? 13.5 : ringTier === 2 ? 18.0 : 11.0;
+                const r = Math.min(21.0, Math.max(6.5, baseRadius + ((i * 3.7) % 2.5) - 1.25));
+                const px = Math.cos(baseAngle) * r;
+                const pz = Math.sin(baseAngle) * r;
                 c.position.set(px, 1, pz);
                 c.rotation.set(0, 0, 0);
                 c.lookAt(0, 1, 10);
@@ -2780,30 +2889,32 @@ class ThreeManager {
                 c.userData.isMoving = false;
                 c.userData.wasTagged = false;
                 c.userData.isCustomArmAnim = false;
+                c.userData.isFallen = false;
+                c.userData.fallState = 'upright';
+                c.userData.sprintBoost = 1.0;
             }
         });
 
-        // Set labels and state - NO "CLICK TO UNLEASH" banner, NO player names on Squid Guard!
+        // Set labels and state - Squid Guard has no label; player IT gets IT badge
         const itNum = isFirstGame ? 'GUARD' : getPlayerNumber(itName);
 
-        const itLabel = this.labels[itName];
-        if (itLabel) {
-            if (isFirstGame) {
-                // Round 1: strictly SQUID GUARD with no player names
-                itLabel.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT</span> <span style="color:#f87171">SQUID GUARD</span>`;
-            } else {
+        if (isFirstGame) {
+            if (this.labels['__GUARD__']) {
+                this.labels['__GUARD__'].remove();
+                delete this.labels['__GUARD__'];
+            }
+        } else {
+            const itLabel = this.labels[itName];
+            if (itLabel) {
                 itLabel.innerHTML = `<span style="background:#ef4444; color:white; padding:2px 8px; border-radius:6px; font-weight:bold; margin-right:4px; box-shadow:0 0 10px rgba(239,68,68,0.8);">🏃 IT</span> <span style="color:#f87171">#${itNum}</span> ${itName}`;
             }
         }
 
-        const bannerMsg = isFirstGame 
-            ? 'ROUND 1 • SQUID GUARD IS CHASING!' 
-            : `ROUND ${roundData.roundNum} • #${itNum} ${itName} IS CHASING!`;
-
+        // Do not display an overlapping chase banner in the header during the chase
         this.onStateChange({ 
             phase: 'DOORS', 
             round: roundData.roundNum, 
-            msg: bannerMsg 
+            msg: '' 
         });
 
         // Brief 1.2s anticipation pause, then IT automatically starts chasing!
@@ -2811,12 +2922,31 @@ class ThreeManager {
 
         // Evasion loop: players run avoiding IT, strictly staying inside the circle!
         let evasionActive = true;
+        this.stopEvasion = () => { evasionActive = false; };
         const circleMaxRadius = 22.5;
-        let currentTargetVictim: string | null = null;
+        let currentTargetName: string | null = null;
+        let currentChaseProgress = 0;
+        let lastRandomTripTime = Date.now();
 
         const evasionLoop = () => {
             if (!evasionActive) return;
             const itPos = itChar ? itChar.position : new THREE.Vector3(0, 1, 0);
+
+            // Dynamic fall/stumble events: upright runners occasionally stumble and get back up
+            if (Date.now() - lastRandomTripTime > 3200 && others.length > 2) {
+                lastRandomTripTime = Date.now();
+                const candidates = others.filter((n: string) => {
+                    const char = this.characters[n];
+                    return char && char.userData.isAlive && !char.userData.isFallen && !char.userData.wasTagged && n !== currentTargetName;
+                });
+                if (candidates.length > 0) {
+                    const pickedName = candidates[Math.floor(Math.random() * candidates.length)];
+                    const pickedChar = this.characters[pickedName];
+                    if (pickedChar) {
+                        this.triggerPlayerTrip(pickedChar, false);
+                    }
+                }
+            }
 
             others.forEach((name: string, idx: number) => {
                 const c = this.characters[name];
@@ -2829,34 +2959,133 @@ class ThreeManager {
                 awayDir.normalize();
 
                 const perpDir = new THREE.Vector2(-awayDir.y, awayDir.x);
-                const dodgeOffset = Math.sin(Date.now() * 0.005 + idx * 2.2) * 0.35;
+                const isTarget = (name === currentTargetName);
 
-                // If this player is the target victim, they run hard then fatigue / get cornered
-                let moveSpeed = 0.24;
-                if (name === currentTargetVictim) {
-                    const dToIt = c.position.distanceTo(itPos);
-                    if (dToIt < 3.2) {
-                        moveSpeed = 0.06; // trapped / out of breath
-                    } else if (dToIt < 7.5) {
-                        moveSpeed = 0.13; // stumbling
+                // If fallen and recovering on the turf: crawl slowly away
+                if (c.userData.isFallen) {
+                    const crawlSpeed = 0.035;
+                    let crawlX = c.position.x + awayDir.x * crawlSpeed;
+                    let crawlZ = c.position.z + awayDir.y * crawlSpeed;
+                    const dCenter = Math.sqrt(crawlX * crawlX + crawlZ * crawlZ);
+                    if (dCenter > circleMaxRadius) {
+                        const ang = Math.atan2(crawlZ, crawlX);
+                        crawlX = Math.cos(ang) * circleMaxRadius;
+                        crawlZ = Math.sin(ang) * circleMaxRadius;
+                    }
+                    c.position.x = crawlX;
+                    c.position.z = crawlZ;
+                    return;
+                }
+
+                // Flocking separation between runners to prevent overlapping clumps
+                let repulseX = 0;
+                let repulseZ = 0;
+                others.forEach((otherName: string) => {
+                    if (otherName === name) return;
+                    const oc = this.characters[otherName];
+                    if (!oc || !oc.userData.isAlive) return;
+                    const diffX = c.position.x - oc.position.x;
+                    const diffZ = c.position.z - oc.position.z;
+                    const dSq = diffX * diffX + diffZ * diffZ;
+                    if (dSq < 16.0 && dSq > 0.01) {
+                        const d = Math.sqrt(dSq);
+                        const force = (4.0 - d) / 4.0;
+                        repulseX += (diffX / d) * force * 0.18;
+                        repulseZ += (diffZ / d) * force * 0.18;
+                    }
+                });
+
+                const distToIt = Math.sqrt(
+                    (c.position.x - itPos.x) * (c.position.x - itPos.x) +
+                    (c.position.z - itPos.z) * (c.position.z - itPos.z)
+                );
+
+                let baseSpeed = 0.20;
+                let dodgeMult = 0.30;
+                if (isTarget) {
+                    if (currentChaseProgress < 0.85) {
+                        baseSpeed = distToIt < 4.8 ? 0.28 : 0.24;
+                        dodgeMult = 0.40;
+                        c.userData.runSpeed = distToIt < 6 ? 20 : 16;
                     } else {
-                        moveSpeed = 0.21; // fleeing
+                        // Final stretch: slow down so IT makes the dramatic catch
+                        baseSpeed = 0.13;
+                        dodgeMult = 0.15;
+                        c.userData.runSpeed = 13;
+                    }
+                } else {
+                    if (distToIt < 7.5) {
+                        baseSpeed = 0.24;
+                        c.userData.runSpeed = 19; // panic sprint
+                    } else {
+                        baseSpeed = 0.17;
+                        c.userData.runSpeed = 14;
                     }
                 }
 
-                const moveVec = awayDir.clone().multiplyScalar(moveSpeed).add(perpDir.clone().multiplyScalar(dodgeOffset * (moveSpeed / 0.24)));
+                if (c.userData.sprintBoost) {
+                    baseSpeed *= c.userData.sprintBoost;
+                }
+
+                const dodgeOffset = Math.sin(Date.now() * 0.0055 + idx * 2.3) * dodgeMult;
+                const moveVec = awayDir.clone().multiplyScalar(baseSpeed)
+                    .add(perpDir.clone().multiplyScalar(dodgeOffset))
+                    .add(new THREE.Vector2(repulseX, repulseZ));
 
                 let newX = c.position.x + moveVec.x;
                 let newZ = c.position.z + moveVec.y;
 
+                // Smooth inward boundary deflection to keep players inside playing field without vibrating at walls
                 const currentDistFromCenter = Math.sqrt(newX * newX + newZ * newZ);
-                if (currentDistFromCenter > circleMaxRadius) {
+                if (currentDistFromCenter > 18.0) {
+                    const steerForce = (currentDistFromCenter - 18.0) / (circleMaxRadius - 18.0);
+                    newX -= (newX / currentDistFromCenter) * steerForce * 0.26;
+                    newZ -= (newZ / currentDistFromCenter) * steerForce * 0.26;
+                }
+                const clampedDist = Math.sqrt(newX * newX + newZ * newZ);
+                if (clampedDist > circleMaxRadius) {
                     const angle = Math.atan2(newZ, newX);
                     newX = Math.cos(angle) * circleMaxRadius;
                     newZ = Math.sin(angle) * circleMaxRadius;
                 }
 
                 c.lookAt(newX + moveVec.x * 2, 1, newZ + moveVec.y * 2);
+
+                // Body banking roll into sharp evasive turns
+                c.rotation.z = -dodgeOffset * 0.32;
+
+                // Panicked backward glance towards IT
+                if (Math.random() < 0.012 && c.userData.parts?.head && !c.userData.isGlancing) {
+                    c.userData.isGlancing = true;
+                    const head = c.userData.parts.head;
+                    const glanceSide = (idx % 2 === 0 ? 1 : -1) * 0.75;
+                    gsap.to(head.rotation, {
+                        y: glanceSide,
+                        duration: 0.22,
+                        yoyo: true,
+                        repeat: 1,
+                        ease: "power1.inOut",
+                        onComplete: () => {
+                            if (c.userData) c.userData.isGlancing = false;
+                        }
+                    });
+                }
+
+                // Panicked hop / jump
+                if (Math.random() < 0.006 && !c.userData.isHopping && distToIt < 12) {
+                    c.userData.isHopping = true;
+                    gsap.to(c.position, {
+                        y: 1.55,
+                        duration: 0.2,
+                        yoyo: true,
+                        repeat: 1,
+                        ease: "power1.out",
+                        onComplete: () => {
+                            if (c.userData) c.userData.isHopping = false;
+                        }
+                    });
+                }
+
                 c.position.x = newX;
                 c.position.z = newZ;
             });
@@ -2865,62 +3094,15 @@ class ThreeManager {
         };
         requestAnimationFrame(evasionLoop);
 
-        // Visual touch spark effect helper
-        const createTouchImpactSpark = (x: number, z: number) => {
-            if (!this.scene) return;
-            const sparkGroup = new THREE.Group();
-            sparkGroup.position.set(x, 1.25, z);
-
-            const ringGeo = new THREE.RingGeometry(0.12, 0.52, 20);
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: 0xff1e56,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 1
-            });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            if (this.camera) ring.lookAt(this.camera.position);
-            sparkGroup.add(ring);
-
-            const innerGeo = new THREE.RingGeometry(0.04, 0.26, 16);
-            const innerMat = new THREE.MeshBasicMaterial({
-                color: 0xffe600,
-                side: THREE.DoubleSide,
-                transparent: true,
-                opacity: 1
-            });
-            const innerRing = new THREE.Mesh(innerGeo, innerMat);
-            innerRing.position.z = 0.02;
-            sparkGroup.add(innerRing);
-
-            this.scene.add(sparkGroup);
-
-            gsap.to(sparkGroup.scale, {
-                x: 3.5,
-                y: 3.5,
-                z: 3.5,
-                duration: 0.35,
-                ease: "power2.out"
-            });
-            gsap.to([ringMat, innerMat], {
-                opacity: 0,
-                duration: 0.35,
-                ease: "power2.out",
-                onComplete: () => {
-                    if (this.scene) this.scene.remove(sparkGroup);
-                    ringGeo.dispose();
-                    ringMat.dispose();
-                    innerGeo.dispose();
-                    innerMat.dispose();
-                }
-            });
-        };
-
         // IT catches designated target(s)
         let targetsToCatch: string[] = roundData.eliminated.filter((name: string) => name !== itName);
         if (targetsToCatch.length === 0 && others.length > 0) {
             targetsToCatch = [others[Math.floor(Math.random() * others.length)]];
         }
+
+        const totalDuration = this.tagTimer || 15;
+        const perTargetDurationSec = Math.max(5, Math.round(totalDuration / Math.max(1, targetsToCatch.length)));
+        const chaseDurationMs = perTargetDurationSec * 1000;
 
         for (let tIdx = 0; tIdx < targetsToCatch.length; tIdx++) {
             const victimName = targetsToCatch[tIdx];
@@ -2929,19 +3111,32 @@ class ThreeManager {
 
             if (!victimChar || !itChar) continue;
 
-            currentTargetVictim = victimName;
+            currentTargetName = victimName;
+            currentChaseProgress = 0;
             itChar.userData.isMoving = true;
+            this.onStateChange({ isMusicPlaying: true });
 
             await new Promise<void>((resolveCatch) => {
                 const chaseStart = Date.now();
-                // Camera stages: 'high' -> 'close' -> 'very_close'
-                let camStage: 'high' | 'close' | 'very_close' = 'high';
+                let lastReportedSec = -1;
 
                 const chaseInterval = setInterval(() => {
                     if (!itChar || !victimChar) {
                         clearInterval(chaseInterval);
+                        this.activeChaseInterval = null;
+                        this.onStateChange({ chaseSecondsLeft: undefined });
                         resolveCatch();
                         return;
+                    }
+
+                    const elapsed = Date.now() - chaseStart;
+                    const progress = Math.min(1, elapsed / chaseDurationMs);
+                    currentChaseProgress = progress;
+                    const secLeft = Math.max(0, Math.ceil((chaseDurationMs - elapsed) / 1000));
+
+                    if (secLeft !== lastReportedSec) {
+                        lastReportedSec = secLeft;
+                        this.onStateChange({ chaseSecondsLeft: secLeft });
                     }
 
                     itChar.userData.moveTime = (itChar.userData.moveTime || 0) + 0.08;
@@ -2951,183 +3146,144 @@ class ThreeManager {
                     const dx = targetX - itChar.position.x;
                     const dz = targetZ - itChar.position.z;
                     const dist = Math.sqrt(dx * dx + dz * dz);
-                    const normDx = dx / (dist || 1);
-                    const normDz = dz / (dist || 1);
-                    const perpX = -normDz;
-                    const perpZ = normDx;
 
                     itChar.lookAt(targetX, 1, targetZ);
 
-                    const chaseElapsed = Date.now() - chaseStart;
+                    // Immersive Stable Progressive Camera: Gently zooms closer synchronized with timer without fast panning or spinning
+                    if (this.camera) {
+                        const midX = (itChar.position.x + victimChar.position.x) * 0.5;
+                        const midZ = (itChar.position.z + victimChar.position.z) * 0.5;
 
-                    // CAMERA ANGLE VARIATION:
-                    // 1) HIGH: Initially set at round start
-                    // 2) CLOSE: Dynamic over-the-shoulder chase tracking angle
-                    if (camStage === 'high' && (dist < 11.5 || chaseElapsed > 850) && dist > 2.6) {
-                        camStage = 'close';
-                        if (this.camera) {
-                            const closeCamX = targetX - normDx * 5.8 + perpX * 3.6;
-                            const closeCamZ = targetZ - normDz * 5.8 + perpZ * 3.6;
-                            const closeCamY = 5.4;
-                            gsap.killTweensOf(this.camera.position);
-                            gsap.to(this.camera.position, {
-                                x: closeCamX,
-                                y: closeCamY,
-                                z: closeCamZ,
-                                duration: 0.75,
-                                ease: "power2.out",
-                                onUpdate: () => {
-                                    this.camera?.lookAt(targetX, 1.3, targetZ);
-                                }
-                            });
-                        }
-                    } else if (camStage === 'close' && dist > 2.6 && this.camera) {
-                        // Smoothly track while in CLOSE mode
-                        const desiredX = targetX - normDx * 5.8 + perpX * 3.6;
-                        const desiredZ = targetZ - normDz * 5.8 + perpZ * 3.6;
-                        this.camera.position.x += (desiredX - this.camera.position.x) * 0.12;
-                        this.camera.position.z += (desiredZ - this.camera.position.z) * 0.12;
-                        this.camera.position.y += (5.4 - this.camera.position.y) * 0.12;
-                        this.camera.lookAt(targetX, 1.3, targetZ);
+                        const container = document.getElementById(this.containerId);
+                        const width = container?.clientWidth || window.innerWidth;
+                        const height = container?.clientHeight || Math.round(window.innerHeight * 0.85);
+                        const aspect = width / Math.max(1, height);
+                        const aspectScale = aspect < 1.65 ? 1.65 / Math.max(0.65, aspect) : 1.0;
+
+                        const baseY = 40 * aspectScale;
+                        const baseZ = 48 * aspectScale;
+
+                        // Very gentle zoom: from 1.0 down to ~0.76 as timer counts down
+                        const zoomFactor = 1.0 - (0.24 * Math.pow(progress, 0.9));
+
+                        // Stable overhead vantage point: gentle X tracking clamped to ±5 units so names remain clear and readable
+                        const targetX = Math.max(-5, Math.min(5, midX * 0.18));
+                        const targetY = baseY * zoomFactor;
+                        const targetZ = baseZ * zoomFactor;
+
+                        // Clamped smooth lookAt target centered on chase action
+                        const lookX = Math.max(-6, Math.min(6, midX * 0.35));
+                        const lookZ = Math.max(-6, Math.min(6, midZ * 0.35 + 1.2));
+                        const targetLook = new THREE.Vector3(lookX, 1.2, lookZ);
+
+                        this.tagCamTargetPos = new THREE.Vector3(targetX, targetY, targetZ);
+                        this.tagCamTargetLook = targetLook;
                     }
 
-                    // 3) VERY CLOSE: Low eye-level dramatic action angle framing the physical touch
-                    if (dist <= 2.6 && camStage !== 'very_close') {
-                        camStage = 'very_close';
-                        if (this.camera) {
-                            const veryCloseCamX = targetX - perpX * 2.7 - normDx * 1.3;
-                            const veryCloseCamZ = targetZ - perpZ * 2.7 - normDz * 1.3;
-                            const veryCloseCamY = 1.95;
-                            gsap.killTweensOf(this.camera.position);
-                            gsap.to(this.camera.position, {
-                                x: veryCloseCamX,
-                                y: veryCloseCamY,
-                                z: veryCloseCamZ,
-                                duration: 0.45,
-                                ease: "power2.out",
-                                onUpdate: () => {
-                                    this.camera?.lookAt(targetX, 1.25, targetZ);
-                                }
-                            });
-                        }
+                    // Target victim dramatic slip/stumble as IT closes in during the final stretch
+                    if (progress >= 0.74 && !victimChar.userData.isFallen && !victimChar.userData.wasTagged) {
+                        this.triggerPlayerTrip(victimChar, true);
                     }
 
-                    // Guard reaches arms forward to touch the player
-                    if (dist < 3.2) {
+                    // IT reaches arms forward to touch/catch the player
+                    if (dist < 3.2 && dist > 1.35) {
                         if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
                             itChar.userData.isCustomArmAnim = true;
                             gsap.to(itChar.userData.parts.armR.rotation, {
-                                x: -Math.PI * 0.58,
-                                z: -0.15,
-                                duration: 0.15,
+                                x: -Math.PI * 0.72,
+                                z: -0.22,
+                                duration: 0.18,
                                 overwrite: "auto"
                             });
                             gsap.to(itChar.userData.parts.armL.rotation, {
-                                x: -Math.PI * 0.52,
-                                z: 0.15,
-                                duration: 0.15,
+                                x: -Math.PI * 0.70,
+                                z: 0.22,
+                                duration: 0.18,
                                 overwrite: "auto"
                             });
                         }
                         if (itChar.userData.parts?.torso) {
                             gsap.to(itChar.userData.parts.torso.rotation, {
                                 x: 0.32,
-                                duration: 0.15,
+                                duration: 0.18,
                                 overwrite: "auto"
                             });
                         }
                     }
 
-                    // Guard movement speed: accelerates into sprint and lunge
-                    let stepSpeed = 0.44;
-                    if (dist < 2.5) {
-                        stepSpeed = 0.48; // lunge
-                    } else if (chaseElapsed > 2600) {
-                        stepSpeed = 0.58; // sprint burst to guarantee swift catch
+                    // Pacing of IT:
+                    let itSpeed = 0.25;
+                    if (progress < 0.85) {
+                        // Pursuit phase: stay on victim's heels
+                        if (dist > 5.5) {
+                            itSpeed = 0.34;
+                        } else if (dist > 3.8) {
+                            itSpeed = 0.25;
+                        } else {
+                            itSpeed = 0.18;
+                        }
+                    } else {
+                        // Final stretch: surge to tag victim!
+                        itSpeed = 0.42 + (progress - 0.85) * 0.9;
                     }
 
-                    // IT MUST TOUCH THE PLAYER: keep closing until physical contact dist <= 0.95!
-                    if (dist > 0.95) {
-                        itChar.position.x += normDx * stepSpeed;
-                        itChar.position.z += normDz * stepSpeed;
-                    } else {
-                        // PHYSICAL TOUCH & CATCH!
-                        clearInterval(chaseInterval);
+                    // Contact condition:
+                    const isContact = (dist <= 1.35 && progress >= 0.80) || (progress >= 1.0 && dist <= 2.2) || elapsed >= (chaseDurationMs + 800);
 
-                        // Physical forward hand touch jab directly touching the victim's back
+                    if (!isContact) {
+                        itChar.position.x += (dx / dist) * itSpeed;
+                        itChar.position.z += (dz / dist) * itSpeed;
+                    } else {
+                        // Contact! TOUCH / CATCH!
+                        clearInterval(chaseInterval);
+                        this.activeChaseInterval = null;
+                        this.onStateChange({ chaseSecondsLeft: undefined, isMusicPlaying: false });
+
+                        // Physical hand tap/touch impact
                         if (itChar.userData.parts?.armR) {
                             gsap.to(itChar.userData.parts.armR.position, {
-                                z: 0.4,
-                                duration: 0.08,
+                                z: 0.35,
+                                duration: 0.1,
                                 yoyo: true,
                                 repeat: 1
                             });
                         }
 
-                        // Touch impact spark effect
-                        createTouchImpactSpark(targetX, targetZ);
-
-                        // Impact audio
-                        globalAudio?.play('pop', 500);
                         globalAudio?.play('boom', 420);
-
-                        // Camera impact vibration
-                        if (this.camera) {
-                            gsap.to(this.camera.position, {
-                                x: "+=0.18",
-                                y: "+=0.12",
-                                duration: 0.04,
-                                yoyo: true,
-                                repeat: 3
-                            });
-                        }
+                        globalAudio?.play('pop', 350);
 
                         victimChar.userData.isAlive = false;
                         victimChar.userData.wasTagged = true;
                         victimChar.userData.isMoving = false;
 
-                        // Victim physical reaction to being touched:
-                        // Torso jolts forward from impact
+                        // Victim physical reaction to being touched: arms fly up in shock
+                        if (victimChar.userData.parts) {
+                            victimChar.userData.isCustomArmAnim = true;
+                            gsap.to(victimChar.userData.parts.armL.rotation, { x: -Math.PI * 0.85, z: -0.25, duration: 0.2 });
+                            gsap.to(victimChar.userData.parts.armR.rotation, { x: -Math.PI * 0.85, z: 0.25, duration: 0.2 });
+                        }
+
+                        // Victim stumbles forward from touch impact
                         gsap.to(victimChar.position, {
-                            x: victimChar.position.x + normDx * 0.72,
-                            z: victimChar.position.z + normDz * 0.72,
-                            duration: 0.22,
+                            x: victimChar.position.x + (dx / dist) * 0.75,
+                            z: victimChar.position.z + (dz / dist) * 0.75,
+                            duration: 0.25,
                             ease: "power1.out"
                         });
 
-                        // Arms throw up in shock, head tilts back
-                        if (victimChar.userData.parts) {
-                            victimChar.userData.isCustomArmAnim = true;
-                            gsap.to(victimChar.userData.parts.armL.rotation, { x: -Math.PI * 0.88, z: -0.28, duration: 0.18 });
-                            gsap.to(victimChar.userData.parts.armR.rotation, { x: -Math.PI * 0.88, z: 0.28, duration: 0.18 });
-                            if (victimChar.userData.parts.head) {
-                                gsap.to(victimChar.userData.parts.head.rotation, { x: -0.32, duration: 0.18 });
-                            }
-                        }
-
                         // Victim sits down on turf
                         gsap.to(victimChar.position, {
-                            y: 0.38,
+                            y: 0.4,
                             duration: 0.4,
-                            delay: 0.14,
+                            delay: 0.15,
                             ease: "bounce.out"
                         });
                         gsap.to(victimChar.rotation, {
                             z: Math.PI / 2.2,
-                            y: victimChar.rotation.y + 0.35,
+                            y: victimChar.rotation.y + 0.4,
                             duration: 0.4,
-                            delay: 0.14
+                            delay: 0.15
                         });
-
-                        // Squid Guard stops right behind the player, standing tall and looking down
-                        itChar.userData.isMoving = false;
-                        if (itChar.userData.parts?.torso) {
-                            gsap.to(itChar.userData.parts.torso.rotation, { x: 0.08, duration: 0.3 });
-                        }
-                        if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
-                            gsap.to(itChar.userData.parts.armR.rotation, { x: -0.18, z: 0, duration: 0.3 });
-                            gsap.to(itChar.userData.parts.armL.rotation, { x: -0.18, z: 0, duration: 0.3 });
-                        }
 
                         const vLabel = this.labels[victimName];
                         if (vLabel) {
@@ -3140,28 +3296,36 @@ class ThreeManager {
                         this.lastCaughtPlayer = victimName;
                         this.tagRoundCount++;
 
-                        const itTaggedName = isFirstGame ? 'SQUID GUARD' : `#${itNum} ${itName}`;
                         this.onStateChange({
                             phase: 'ELIMINATED',
-                            msg: `${itTaggedName} TAGGED #${victimNum} ${victimName}!`,
-                            eliminatedThisRound: targetsToCatch.slice(0, tIdx + 1)
+                            msg: `#${victimNum} ${victimName} WAS CAUGHT!`,
+                            eliminatedThisRound: targetsToCatch.slice(0, tIdx + 1),
+                            isMusicPlaying: false
                         });
 
-                        // Hold the VERY CLOSE camera angle for 1.4s so the touch and elimination is celebrated
+                        // Hold close camera framing for 1.1s so user enjoys the dramatic catch
                         setTimeout(() => {
-                            // Smoothly glide back up to HIGH arena framing
+                            // Smoothly restore wide arena framing
                             this.updateCameraFraming(false);
+                            if (itChar.userData.parts?.torso) {
+                                gsap.to(itChar.userData.parts.torso.rotation, { x: 0, duration: 0.4 });
+                            }
                             itChar.userData.isCustomArmAnim = false;
                             victimChar.userData.isCustomArmAnim = false;
                             resolveCatch();
-                        }, 1400);
+                        }, 1100);
                     }
-                }, 25);
+                }, 16);
+
+                this.activeChaseInterval = chaseInterval;
             });
         }
 
         // Stop evasion movement
         evasionActive = false;
+        this.stopEvasion = null;
+        this.activeChaseInterval = null;
+        this.onStateChange({ chaseSecondsLeft: undefined, isMusicPlaying: false });
         if (itChar) itChar.userData.isMoving = false;
 
         // Survivors celebrate escaping!
@@ -3193,11 +3357,11 @@ class ThreeManager {
 
         await new Promise(r => setTimeout(r, 2200));
 
-        const escCount = roundData.survivors.length;
         this.onStateChange({
             phase: 'IDLE',
-            msg: escCount === 1 ? '1 PLAYER ESCAPED!' : `${escCount} PLAYERS ESCAPED!`,
-            eliminatedThisRound: roundData.eliminated
+            msg: `${roundData.survivors.length} PLAYERS ESCAPED!`,
+            eliminatedThisRound: roundData.eliminated,
+            isMusicPlaying: false
         });
 
         await new Promise(r => setTimeout(r, 1500));
@@ -3222,14 +3386,14 @@ class ThreeManager {
             });
         }
         
-        this.onStateChange({ phase: 'SPINNING', round: roundData.roundNum, msg: 'CLICK PLATFORM TO SPIN' });
+        this.onStateChange({ phase: 'SPINNING', round: roundData.roundNum, msg: 'CLICK PLATFORM TO SPIN', isMusicPlaying: true });
         
         // Wait for user to manually spin and finish spinning
         await new Promise<void>(resolve => {
             this.waitingForSpinResolve = resolve;
         });
 
-        this.onStateChange({ phase: 'DOORS', msg: 'CHOOSE A ROOM!' });
+        this.onStateChange({ phase: 'DOORS', msg: 'CHOOSE A ROOM!', isMusicPlaying: true });
         globalAudio.play('pop', 300);
         
         this.doors.forEach(d => {
@@ -3373,7 +3537,7 @@ class ThreeManager {
         this.doors.forEach(d => { gsap.to(d.panel.rotation, { y: 0, duration: 0.5 }); });
         await new Promise(r => setTimeout(r, 1000));
 
-        this.onStateChange({ phase: 'EVALUATING', msg: 'EVALUATING...' });
+        this.onStateChange({ phase: 'EVALUATING', msg: 'EVALUATING...', isMusicPlaying: false });
         globalAudio.play('alarm');
         
         gsap.to(this.ambientLight, { intensity: 0.1, duration: 0.5 });
@@ -3415,7 +3579,7 @@ class ThreeManager {
                 gsap.to(char.position, { y: 0.3, duration: 0.5 });
             });
             
-            this.onStateChange({ phase: 'ELIMINATED', eliminatedThisRound: roundData.eliminated });
+            this.onStateChange({ phase: 'ELIMINATED', eliminatedThisRound: roundData.eliminated, isMusicPlaying: false });
             
 
         }
@@ -3475,7 +3639,7 @@ class ThreeManager {
             await Promise.all(returnPromises);
         }
 
-        this.onStateChange({ phase: 'CLEANUP', eliminatedThisRound: [] });
+        this.onStateChange({ phase: 'CLEANUP', eliminatedThisRound: [], isMusicPlaying: false });
 
         this.doors.forEach(d => {
              gsap.to(d.group.position, { y: -10, duration: 1.5, ease:"power2.in" });
@@ -3489,7 +3653,7 @@ class ThreeManager {
         const winnerMsg = this.gameType === 'tag'
             ? (mode === 'picker' ? (chosenOnes.length > 1 ? 'PLAYERS CAUGHT' : 'PLAYER CAUGHT') : 'SOLE SURVIVOR • ESCAPED ALL TAGS!')
             : (mode === 'picker' ? 'ELIMINATION COMPLETE' : 'SOLE SURVIVOR');
-        this.onStateChange({ phase: 'WINNER', msg: winnerMsg });
+        this.onStateChange({ phase: 'WINNER', msg: winnerMsg, isMusicPlaying: false });
         
         if (this.gameType === 'tag') {
             gsap.to(this.spotLight, { intensity: 6, duration: 2 });
@@ -3576,11 +3740,11 @@ class ThreeManager {
         const time = Date.now() * 0.001;
         Object.values(this.characters).forEach((char: any) => {
             if(char && char.userData?.isAlive) {
-                if (char.userData.parts?.torso) {
+                if (char.userData.parts?.torso && !char.userData.isFallen) {
                     char.userData.parts.torso.scale.y = 1 + Math.sin(time * 3 + (char.userData.moveTime || 0)) * 0.02;
                 }
-                if(char.userData.isMoving) {
-                    const speed = 15;
+                if(char.userData.isMoving && !char.userData.isFallen) {
+                    const speed = char.userData.runSpeed || 15;
                     if (char.userData.parts?.legLGroup) {
                         char.userData.parts.legLGroup.rotation.x = Math.sin(time * speed) * 0.6;
                     }
@@ -3597,6 +3761,14 @@ class ThreeManager {
                             char.userData.parts.armR.rotation.x = Math.sin(time * speed) * 0.6;
                         }
                     }
+                } else if (char.userData.isFallen && char.userData.isMoving) {
+                    // Subtle scrambling kicks while crawling on the turf
+                    if (char.userData.parts?.legLGroup) {
+                        char.userData.parts.legLGroup.rotation.x = Math.sin(time * 8) * 0.22;
+                    }
+                    if (char.userData.parts?.legRGroup) {
+                        char.userData.parts.legRGroup.rotation.x = Math.sin(time * 8 + Math.PI) * 0.22;
+                    }
                 }
             }
         });
@@ -3607,12 +3779,19 @@ class ThreeManager {
             }
         });
 
+        if (this.gameType === 'tag' && this.camera && this.tagCamTargetPos && this.tagCamTargetLook) {
+            this.camera.position.lerp(this.tagCamTargetPos, 0.04);
+            this.currentCamLookAt.lerp(this.tagCamTargetLook, 0.04);
+            this.camera.lookAt(this.currentCamLookAt);
+        }
+
         this.updateLabels();
         if(this.scene && this.camera) this.renderer?.render(this.scene, this.camera);
     }
 
     destroy() {
         this.isAnimating = false;
+        this.cancelChase();
         if (this.renderer && this.renderer.domElement.parentNode) {
             this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
         }
@@ -3700,29 +3879,50 @@ const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: b
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [mounted, setMounted] = useState(false);
 
+    const sendCommand = (func: string, args: any[] = []) => {
+        if (!iframeRef.current?.contentWindow) return;
+        try {
+            iframeRef.current.contentWindow.postMessage(
+                JSON.stringify({ event: 'command', func, args }),
+                '*'
+            );
+        } catch {
+            // Ignore cross-origin warnings
+        }
+    };
+
     useEffect(() => {
         if (isPlaying) {
             setMounted(true);
         }
     }, [isPlaying]);
 
-    useEffect(() => {
-        if (!iframeRef.current) return;
-        const iframe = iframeRef.current;
-        try {
-            if (isPlaying && !isMuted) {
-                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'unMute' }), '*');
-                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'setVolume', args: [80] }), '*');
-                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'playVideo' }), '*');
-            } else if (isMuted) {
-                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*');
-            } else {
-                iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo' }), '*');
-            }
-        } catch {
-            // Ignore cross-origin warnings
+    const handleIframeLoad = () => {
+        if (isPlaying && !isMuted) {
+            sendCommand('unMute');
+            sendCommand('setVolume', [80]);
+            sendCommand('playVideo');
+        } else if (isPlaying && isMuted) {
+            sendCommand('mute');
+            sendCommand('playVideo');
+        } else {
+            sendCommand('pauseVideo');
         }
-    }, [isPlaying, isMuted]);
+    };
+
+    useEffect(() => {
+        if (!iframeRef.current || !mounted) return;
+        if (isPlaying && !isMuted) {
+            sendCommand('unMute');
+            sendCommand('setVolume', [80]);
+            sendCommand('playVideo');
+        } else if (isPlaying && isMuted) {
+            sendCommand('mute');
+            sendCommand('playVideo');
+        } else {
+            sendCommand('pauseVideo');
+        }
+    }, [isPlaying, isMuted, mounted]);
 
     if (!mounted) return null;
 
@@ -3748,6 +3948,87 @@ const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: b
                 title="Tag Soundtrack"
                 allow="autoplay; encrypted-media"
                 style={{ border: 0 }}
+                onLoad={handleIframeLoad}
+            />
+        </div>
+    );
+};
+
+const MingleMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: boolean }) => {
+    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [mounted, setMounted] = useState(false);
+
+    const sendCommand = (func: string, args: any[] = []) => {
+        if (!iframeRef.current?.contentWindow) return;
+        try {
+            iframeRef.current.contentWindow.postMessage(
+                JSON.stringify({ event: 'command', func, args }),
+                '*'
+            );
+        } catch {
+            // Ignore cross-origin warnings
+        }
+    };
+
+    useEffect(() => {
+        if (isPlaying) {
+            setMounted(true);
+        }
+    }, [isPlaying]);
+
+    const handleIframeLoad = () => {
+        if (isPlaying && !isMuted) {
+            sendCommand('unMute');
+            sendCommand('setVolume', [80]);
+            sendCommand('playVideo');
+        } else if (isPlaying && isMuted) {
+            sendCommand('mute');
+            sendCommand('playVideo');
+        } else {
+            sendCommand('pauseVideo');
+        }
+    };
+
+    useEffect(() => {
+        if (!iframeRef.current || !mounted) return;
+        if (isPlaying && !isMuted) {
+            sendCommand('unMute');
+            sendCommand('setVolume', [80]);
+            sendCommand('playVideo');
+        } else if (isPlaying && isMuted) {
+            sendCommand('mute');
+            sendCommand('playVideo');
+        } else {
+            sendCommand('pauseVideo');
+        }
+    }, [isPlaying, isMuted, mounted]);
+
+    if (!mounted) return null;
+
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: -9999,
+                left: -9999,
+                width: '320px',
+                height: '240px',
+                pointerEvents: 'none',
+                opacity: 0.001,
+                zIndex: -999
+            }}
+            aria-hidden="true"
+        >
+            <iframe
+                id="yt-player"
+                ref={iframeRef}
+                width="320"
+                height="240"
+                src="https://www.youtube-nocookie.com/embed/SbAKYgfYET8?enablejsapi=1&autoplay=1&loop=1&playlist=SbAKYgfYET8&controls=0&disablekb=1&fs=0&playsinline=1"
+                title="Mingle Soundtrack"
+                allow="autoplay; encrypted-media"
+                style={{ border: 0 }}
+                onLoad={handleIframeLoad}
             />
         </div>
     );
@@ -3761,16 +4042,22 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
     const [view, setView] = useState('home'); 
     const [activeGame, setActiveGame] = useState<'mingle' | 'tag'>('mingle');
     const [students, setStudents] = useState<string[]>(getSavedRoster());
-    const [gameState, setGameState] = useState<any>({ phase: 'IDLE', msg: '', eliminatedThisRound: [] }); 
+    const [gameState, setGameState] = useState<any>({ phase: 'IDLE', msg: '', eliminatedThisRound: [], isMusicPlaying: false }); 
     const [chosenOnes, setChosenOnes] = useState<string[]>([]);
     const [totalEliminated, setTotalEliminated] = useState(0);
     const [gameMode, setGameMode] = useState('picker');
     const [pickCount, setPickCount] = useState(1);
+    const [tagTimer, setTagTimer] = useState<number>(15);
     
     const threeManagerRef = useRef<ThreeManager | null>(null);
     const isFirstMountRef = useRef(true);
     const isAudioMuted = useRef(false);
     const [muteUI, setMuteUI] = useState(false);
+    const [userMusicEnabled, setUserMusicEnabled] = useState(true);
+
+    const toggleMusic = () => {
+        setUserMusicEnabled(prev => !prev);
+    };
 
     useEffect(() => {
         if (!globalAudio) {
@@ -3905,6 +4192,7 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         setView('game');
         setChosenOnes([]);
         setTotalEliminated(0);
+        setGameState({ phase: 'SETUP', msg: 'GET READY', eliminatedThisRound: [], isMusicPlaying: false });
         
         const tm = threeManagerRef.current;
         if(!tm) return;
@@ -3912,6 +4200,7 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         // Reset Tag round state when starting so Round 1 is strictly the Squid Guard!
         tm.lastCaughtPlayer = null;
         tm.tagRoundCount = 0;
+        tm.setTagTimer(tagTimer);
         
         // Spawn players before starting sequence in proper game type
         tm.setGameType(activeGame);
@@ -3926,13 +4215,13 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         for (let i = 0; i < engine.rounds.length; i++) {
             const round = engine.rounds[i];
             
-            setGameState({ phase: 'SETUP', msg: `ROUND ${round.roundNum}`, eliminatedThisRound: [] });
+            setGameState({ phase: 'SETUP', msg: `ROUND ${round.roundNum}`, eliminatedThisRound: [], isMusicPlaying: false });
             await new Promise(r => setTimeout(r, 1500));
             
             await tm.playRound(round);
             
             if (i < engine.rounds.length - 1) {
-                 setGameState({ phase: 'SETUP', msg: `${round.survivors.length} PLAYERS REMAIN`, eliminatedThisRound: [] });
+                 setGameState({ phase: 'SETUP', msg: `${round.survivors.length} PLAYERS REMAIN`, eliminatedThisRound: [], isMusicPlaying: false });
                  await new Promise(r => setTimeout(r, 2000));
             }
         }
@@ -3955,7 +4244,7 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             startGameWith(remainingStudents);
         } else {
             // Reset the game back to the home screen ready for the next round
-            setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [] });
+            setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [], isMusicPlaying: false });
             setView('home');
             setChosenOnes([]);
             setTotalEliminated(0);
@@ -3970,11 +4259,12 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
 
     const resetGame = () => {
         stopAnnounce();
-        setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [] });
+        setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [], isMusicPlaying: false });
         setView('home');
         setChosenOnes([]);
         setTotalEliminated(0);
         if (threeManagerRef.current) {
+            threeManagerRef.current.cancelChase();
             threeManagerRef.current.lastCaughtPlayer = null;
             threeManagerRef.current.tagRoundCount = 0;
             threeManagerRef.current.setGameType(activeGame);
@@ -4020,23 +4310,54 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                     
                     {gameMode === 'picker' && (
                         <div className="flex flex-col gap-2 bg-slate-900 p-4 rounded-xl border border-slate-700/50">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-300 font-bold text-sm uppercase tracking-wider">Target Eliminations:</span>
-                                        <span className="text-rose-500 font-bold text-xl bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 shadow-inner">{pickCount}</span>
-                                    </div>
-                                    <input 
-                                        type="range" 
-                                        min="1" 
-                                        max="10" 
-                                        value={pickCount} 
-                                        onChange={(e) => setPickCount(parseInt(e.target.value))}
-                                        className="w-full mt-2 accent-rose-600 cursor-pointer"
-                                    />
-                                    <div className="flex justify-between text-xs text-slate-500 font-bold px-1 mt-1">
-                                        <span>1</span>
-                                        <span>10</span>
-                                    </div>
-                                </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-300 font-bold text-sm uppercase tracking-wider">Targets:</span>
+                                <span className="text-rose-500 font-bold text-xl bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 shadow-inner">{pickCount}</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="1" 
+                                max="10" 
+                                value={pickCount} 
+                                onChange={(e) => setPickCount(parseInt(e.target.value))}
+                                className="w-full mt-2 accent-rose-600 cursor-pointer"
+                            />
+                            <div className="flex justify-between text-xs text-slate-500 font-bold px-1 mt-1">
+                                <span>1</span>
+                                <span>10</span>
+                            </div>
+                        </div>
+                    )}
+                    {activeGame === 'tag' && (
+                        <div className="flex flex-col gap-2 bg-slate-900 p-4 rounded-xl border border-slate-700/50">
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-300 font-bold text-sm uppercase tracking-wider flex items-center gap-1.5">
+                                    <Clock className="w-4 h-4 text-amber-400" />
+                                    Chase Timer:
+                                </span>
+                                <span className="text-amber-400 font-bold text-lg bg-slate-800 px-3 py-1 rounded-lg border border-slate-700 shadow-inner">
+                                    {tagTimer === 60 ? '1 Min' : `${tagTimer}s`}
+                                </span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="5" 
+                                max="60" 
+                                step="5"
+                                value={tagTimer} 
+                                onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    setTagTimer(val);
+                                    threeManagerRef.current?.setTagTimer(val);
+                                }}
+                                className="w-full mt-2 accent-amber-500 cursor-pointer"
+                            />
+                            <div className="flex justify-between text-xs text-slate-500 font-bold px-1 mt-1">
+                                <span>5s</span>
+                                <span>30s</span>
+                                <span>60s (1 min)</span>
+                            </div>
+                        </div>
                     )}
                     {gameMode === 'survival' && (
                         <div className="text-emerald-400 text-sm font-bold tracking-widest py-2">
@@ -4078,6 +4399,19 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                             </div>
                         </div>
                     </div>
+                    {activeGame === 'tag' && gameState.chaseSecondsLeft !== undefined && (
+                        <div className="bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-2xl border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-4">
+                            <div className="text-center">
+                                <div className="text-amber-400 text-xs font-bold tracking-widest mb-1 uppercase flex items-center justify-center gap-1.5">
+                                    <Clock className={`w-3.5 h-3.5 ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-400'}`} />
+                                    Chase Timer
+                                </div>
+                                <div className={`text-4xl font-bold leading-none ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-300'}`} style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                    {gameState.chaseSecondsLeft}s
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 
                 <div className="flex gap-3 pointer-events-auto">
@@ -4100,6 +4434,23 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                         title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                     >
                         {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
+                    </button>
+                    <button
+                        onClick={toggleMusic}
+                        className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
+                            userMusicEnabled && Boolean(gameState.isMusicPlaying) && !muteUI
+                                ? 'border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse'
+                                : userMusicEnabled
+                                ? 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+                                : 'border-red-900/60 text-red-500 hover:bg-slate-800'
+                        }`}
+                        title={
+                            userMusicEnabled
+                                ? (gameState.isMusicPlaying ? "Music Playing • Click to Stop Music" : "Music Enabled • Plays during Game")
+                                : "Music Stopped • Click to Enable Music"
+                        }
+                    >
+                        <Music className={`w-5 h-5 ${userMusicEnabled && Boolean(gameState.isMusicPlaying) && !muteUI ? 'scale-110' : ''}`} />
                     </button>
                     <button onClick={toggleMute} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg" title={muteUI ? "Unmute Sound" : "Mute Sound"}>
                         {muteUI ? <VolumeX className="text-red-500" /> : <Volume2 className="text-emerald-400" />}
@@ -4133,9 +4484,9 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             `}} />
 
             {gameState.msg && gameState.phase !== 'WINNER' && (
-                <div className="absolute top-8 left-1/2 transform -translate-x-1/2 w-full text-center pointer-events-none z-50 flex justify-center">
-                    <div className="inline-block bg-slate-900/90 backdrop-blur-md border-b-4 border-rose-600 px-12 py-4 rounded-xl shadow-[0_10px_40px_rgba(244,63,94,0.4)]">
-                        <h2 className="text-3xl md:text-5xl text-white tracking-widest uppercase drop-shadow-md font-bold" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                <div className="absolute top-24 left-1/2 transform -translate-x-1/2 w-full text-center pointer-events-none z-30 flex justify-center px-4">
+                    <div className="inline-block bg-slate-900/90 backdrop-blur-md border-b-4 border-rose-600 px-8 py-3 rounded-xl shadow-[0_10px_40px_rgba(244,63,94,0.4)]">
+                        <h2 className="text-2xl md:text-4xl text-white tracking-widest uppercase drop-shadow-md font-bold" style={{fontFamily: "'Fredoka', sans-serif"}}>
                             {gameState.msg}
                         </h2>
                     </div>
@@ -4205,7 +4556,15 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             {/* YouTube Audio Player for Tag Game */}
             {activeGame === 'tag' && (
                 <TagMusicPlayer
-                    isPlaying={!muteUI && view === 'game'}
+                    isPlaying={userMusicEnabled && !muteUI && Boolean(gameState.isMusicPlaying) && view === 'game'}
+                    isMuted={muteUI}
+                />
+            )}
+
+            {/* YouTube Audio Player for Mingle Game */}
+            {activeGame === 'mingle' && (
+                <MingleMusicPlayer
+                    isPlaying={userMusicEnabled && !muteUI && Boolean(gameState.isMusicPlaying) && view === 'game'}
                     isMuted={muteUI}
                 />
             )}
@@ -4303,6 +4662,17 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                                 title={isFullscreen ? "Exit Fullscreen" : "Full Screen"}
                             >
                                 {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
+                            </button>
+                            <button
+                                onClick={toggleMusic}
+                                className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
+                                    userMusicEnabled
+                                        ? 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+                                        : 'border-red-900/60 text-red-500 hover:bg-slate-800'
+                                }`}
+                                title={userMusicEnabled ? "Music Enabled • Click to Stop Music" : "Music Stopped • Click to Enable Music"}
+                            >
+                                <Music className="w-5 h-5" />
                             </button>
                             <button
                                 onClick={toggleMute}
