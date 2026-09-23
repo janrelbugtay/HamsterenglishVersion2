@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import {
     Users, Play, Check, MousePointerClick, Skull, UserRound, VolumeX,
-    Volume2, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList,
-    Maximize, Minimize, ArrowLeft, Tag, Clock, Music
+    Volume2, Volume1, Power, Crown, RotateCcw, Square, Circle, Triangle, Gamepad2, ClipboardList,
+    Maximize, Minimize, Tag, Clock
 } from 'lucide-react';
 import { ViewState } from '../types';
 
@@ -384,15 +384,37 @@ function buildGlassesMesh(glassesType: number): THREE.Group {
 class AudioEngine {
     ctx: AudioContext;
     muted: boolean;
+    volume: number;
+    masterGain: GainNode;
     bgmGain: GainNode;
 
     constructor() {
         this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         this.muted = false;
+        this.volume = 0.8;
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.8, this.ctx.currentTime);
+        this.masterGain.connect(this.ctx.destination);
+
         this.bgmGain = this.ctx.createGain();
-        this.bgmGain.connect(this.ctx.destination);
+        this.bgmGain.connect(this.masterGain);
         this.bgmGain.gain.value = 0.05;
     }
+
+    setVolume(vol: number) {
+        this.volume = Math.max(0, Math.min(1, vol));
+        if (this.masterGain) {
+            this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
+        }
+    }
+
+    setMuted(muted: boolean) {
+        this.muted = muted;
+        if (this.masterGain) {
+            this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
+        }
+    }
+
     play(type = 'click', freq = 400) {
         if (this.muted || this.ctx.state === 'suspended') return;
         const osc = this.ctx.createOscillator();
@@ -446,9 +468,15 @@ class AudioEngine {
         }
         
         osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        gain.connect(this.masterGain);
     }
-    toggleMute() { this.muted = !this.muted; return this.muted; }
+    toggleMute() {
+        this.muted = !this.muted;
+        if (this.masterGain) {
+            this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
+        }
+        return this.muted;
+    }
     resume() { if(this.ctx.state === 'suspended') this.ctx.resume(); }
 }
 let globalAudio: AudioEngine | null = null;
@@ -826,6 +854,7 @@ class ThreeManager {
     innerPlatform: any = null; 
     isAnimating = false;
     labels: any = {}; 
+    labelSmoothedPos: Record<string, { x: number; y: number; offsetY: number }> = {};
     labelContainer: HTMLDivElement | null = null;
     currentRoundData: any = null;
     onStateChange: any = null; 
@@ -843,6 +872,7 @@ class ThreeManager {
     spinTarget = 0;
     spinTimeout: any = null;
     waitingForSpinResolve: any = null;
+    waitingForTagStartResolve: any = null;
     clickHandler: ((e: MouseEvent) => void) | null = null;
     resizeObserver: ResizeObserver | null = null;
     gameType: 'mingle' | 'tag' = 'mingle';
@@ -929,6 +959,12 @@ class ThreeManager {
         if (this.stopEvasion) {
             this.stopEvasion();
             this.stopEvasion = null;
+        }
+        if (this.waitingForTagStartResolve) {
+            this.waitingForTagStartResolve = null;
+        }
+        if (this.waitingForSpinResolve) {
+            this.waitingForSpinResolve = null;
         }
         if (this.onStateChange) {
             this.onStateChange({ chaseSecondsLeft: undefined, isMusicPlaying: false });
@@ -1439,7 +1475,12 @@ class ThreeManager {
 
         this.clickHandler = (event: MouseEvent) => {
             if (!this.camera) return;
-            if (this.gameType === 'tag') return;
+            if (this.gameType === 'tag') {
+                if (this.waitingForTagStartResolve) {
+                    this.startTagChase();
+                }
+                return;
+            }
 
             if (!this.innerPlatform) return;
             const rect = container.getBoundingClientRect();
@@ -1449,7 +1490,7 @@ class ThreeManager {
             this.raycaster.setFromCamera(this.mouse, this.camera);
             const intersects = this.raycaster.intersectObject(this.innerPlatform, true);
             
-            if (intersects.length > 0) {
+            if (intersects.length > 0 || this.waitingForSpinResolve) {
                 this.manualSpin();
             }
         };
@@ -1457,17 +1498,26 @@ class ThreeManager {
         container.addEventListener('click', this.clickHandler);
     }
 
+    startTagChase() {
+        if (this.waitingForTagStartResolve) {
+            const resolve = this.waitingForTagStartResolve;
+            this.waitingForTagStartResolve = null;
+            if (globalAudio) globalAudio.resume();
+            this.onStateChange({ phase: 'DOORS', msg: '', isMusicPlaying: true });
+            resolve();
+        }
+    }
+
     manualSpin() {
         if (this.gameType === 'tag') {
-            if (this.waitingForSpinResolve) {
-                const resolve = this.waitingForSpinResolve;
-                this.waitingForSpinResolve = null;
-                resolve();
-            }
+            this.startTagChase();
             return;
         }
 
         if (!this.innerPlatform) return;
+        
+        if (globalAudio) globalAudio.resume();
+        this.onStateChange({ phase: 'SPINNING', msg: 'SPINNING...', isMusicPlaying: true });
         
         if (!this.spinTarget || isNaN(this.spinTarget)) {
             this.spinTarget = this.innerPlatform.rotation.y;
@@ -2549,6 +2599,7 @@ class ThreeManager {
         this.characters = {};
         if(this.labelContainer) this.labelContainer.innerHTML = '';
         this.labels = {};
+        this.labelSmoothedPos = {};
 
         // In Tag Game: IT is placed in front (z = 17) and other players in the far opposite arc!
         if (this.gameType === 'tag') {
@@ -2753,6 +2804,7 @@ class ThreeManager {
             x: number;
             y: number;
             screenZ: number;
+            orderKey: number;
             offsetY: number;
         }> = [];
 
@@ -2762,9 +2814,14 @@ class ThreeManager {
             if(!char || !label) return;
 
             if(char.userData.isAlive || char.userData.wasTagged) {
-                const vector = new THREE.Vector3();
-                char.getWorldPosition(vector);
-                vector.y += (this.gameType === 'tag' ? 4.2 : 4.0); 
+                // Read base character position to isolate name tag from dynamic mesh banking/hop jitter
+                const charPos = new THREE.Vector3();
+                char.getWorldPosition(charPos);
+                const vector = new THREE.Vector3(
+                    charPos.x,
+                    charPos.y + (this.gameType === 'tag' ? 4.2 : 4.0),
+                    charPos.z
+                );
                 vector.project(this.camera!);
 
                 if (vector.z > 1.0 || vector.x < -1.1 || vector.x > 1.1 || vector.y < -1.1 || vector.y > 1.1) {
@@ -2772,6 +2829,7 @@ class ThreeManager {
                 } else {
                     const screenX = (vector.x * 0.5 + 0.5) * width;
                     const screenY = (vector.y * -0.5 + 0.5) * height;
+                    const pNum = parseInt(getPlayerNumber(name), 10) || 0;
 
                     visibleItems.push({
                         name,
@@ -2779,6 +2837,7 @@ class ThreeManager {
                         x: screenX,
                         y: screenY,
                         screenZ: vector.z,
+                        orderKey: pNum,
                         offsetY: 0
                     });
                 }
@@ -2787,9 +2846,9 @@ class ThreeManager {
             }
         });
 
-        // Anti-overlap collision solver:
-        // Sort visible labels from left to right on screen
-        visibleItems.sort((a, b) => a.x - b.x);
+        // STABLE deterministic sort by player number.
+        // Sorting by fluctuating screenX causes index swapping at 60Hz which was the main source of jitter!
+        visibleItems.sort((a, b) => a.orderKey - b.orderKey);
 
         for (let i = 0; i < visibleItems.length; i++) {
             const current = visibleItems[i];
@@ -2798,22 +2857,41 @@ class ThreeManager {
                 const dx = Math.abs(current.x - prev.x);
                 const dy = Math.abs((current.y + current.offsetY) - (prev.y + prev.offsetY));
                 
-                // If two labels would overlap in 2D screen space (within 98px horizontally and 24px vertically):
-                if (dx < 98 && dy < 24) {
-                    current.offsetY = prev.offsetY - 26; // Stagger vertically so names never collide!
+                // If two labels overlap in screen space:
+                if (dx < 96 && dy < 24) {
+                    current.offsetY = prev.offsetY - 26; // Stagger vertically with stable precedence
                 }
             }
         }
 
-        // Apply crisp whole-integer pixel transforms with translate3d
+        // Apply smooth temporal LERP interpolation to completely eliminate position jumping & jitter
         for (let i = 0; i < visibleItems.length; i++) {
             const item = visibleItems[i];
-            const px = Math.round(item.x);
-            const py = Math.round(item.y + item.offsetY);
+            const targetX = item.x;
+            const targetY = item.y;
+            const targetOffsetY = item.offsetY;
+
+            if (!this.labelSmoothedPos[item.name]) {
+                this.labelSmoothedPos[item.name] = {
+                    x: targetX,
+                    y: targetY,
+                    offsetY: targetOffsetY
+                };
+            } else {
+                const smoothed = this.labelSmoothedPos[item.name];
+                // Smooth LERP factor 0.35 gives responsive tracking while absorbing all micro-jitter
+                smoothed.x += (targetX - smoothed.x) * 0.35;
+                smoothed.y += (targetY - smoothed.y) * 0.35;
+                // Slower lerp on vertical collision offset (0.2) ensures buttery smooth stack transitions
+                smoothed.offsetY += (targetOffsetY - smoothed.offsetY) * 0.2;
+            }
+
+            const smoothed = this.labelSmoothedPos[item.name];
+            const finalY = smoothed.y + smoothed.offsetY;
             item.label.style.opacity = '1';
-            item.label.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -100%)`;
+            item.label.style.transform = `translate3d(${smoothed.x.toFixed(1)}px, ${finalY.toFixed(1)}px, 0) translate(-50%, -100%)`;
             const depthZ = Math.round(2000 - item.screenZ * 1000);
-            item.label.style.zIndex = `${depthZ + (item.offsetY !== 0 ? 50 : 0)}`;
+            item.label.style.zIndex = `${depthZ + (Math.abs(smoothed.offsetY) > 2 ? 50 : 0)}`;
         }
     }
 
@@ -2910,15 +2988,18 @@ class ThreeManager {
             }
         }
 
-        // Do not display an overlapping chase banner in the header during the chase
+        // Prompt user in-game to click to start tag round & music!
         this.onStateChange({ 
-            phase: 'DOORS', 
+            phase: 'TAG_READY', 
             round: roundData.roundNum, 
-            msg: '' 
+            msg: `ROUND ${roundData.roundNum}`,
+            isMusicPlaying: false 
         });
 
-        // Brief 1.2s anticipation pause, then IT automatically starts chasing!
-        await new Promise(r => setTimeout(r, 1200));
+        // Wait for user to explicitly click to start!
+        await new Promise<void>(resolve => {
+            this.waitingForTagStartResolve = resolve;
+        });
 
         // Evasion loop: players run avoiding IT, strictly staying inside the circle!
         let evasionActive = true;
@@ -2977,7 +3058,7 @@ class ThreeManager {
                     return;
                 }
 
-                // Flocking separation between runners to prevent overlapping clumps
+                // Flocking separation between runners to prevent overlapping clumps with gentle force
                 let repulseX = 0;
                 let repulseZ = 0;
                 others.forEach((otherName: string) => {
@@ -2987,11 +3068,11 @@ class ThreeManager {
                     const diffX = c.position.x - oc.position.x;
                     const diffZ = c.position.z - oc.position.z;
                     const dSq = diffX * diffX + diffZ * diffZ;
-                    if (dSq < 16.0 && dSq > 0.01) {
+                    if (dSq < 9.0 && dSq > 0.01) {
                         const d = Math.sqrt(dSq);
-                        const force = (4.0 - d) / 4.0;
-                        repulseX += (diffX / d) * force * 0.18;
-                        repulseZ += (diffZ / d) * force * 0.18;
+                        const force = (3.0 - d) / 3.0;
+                        repulseX += (diffX / d) * force * 0.08;
+                        repulseZ += (diffZ / d) * force * 0.08;
                     }
                 });
 
@@ -3001,16 +3082,16 @@ class ThreeManager {
                 );
 
                 let baseSpeed = 0.20;
-                let dodgeMult = 0.30;
+                let dodgeMult = 0.25;
                 if (isTarget) {
                     if (currentChaseProgress < 0.85) {
                         baseSpeed = distToIt < 4.8 ? 0.28 : 0.24;
-                        dodgeMult = 0.40;
+                        dodgeMult = 0.35;
                         c.userData.runSpeed = distToIt < 6 ? 20 : 16;
                     } else {
                         // Final stretch: slow down so IT makes the dramatic catch
                         baseSpeed = 0.13;
-                        dodgeMult = 0.15;
+                        dodgeMult = 0.12;
                         c.userData.runSpeed = 13;
                     }
                 } else {
@@ -3027,7 +3108,7 @@ class ThreeManager {
                     baseSpeed *= c.userData.sprintBoost;
                 }
 
-                const dodgeOffset = Math.sin(Date.now() * 0.0055 + idx * 2.3) * dodgeMult;
+                const dodgeOffset = Math.sin(Date.now() * 0.0028 + idx * 1.8) * dodgeMult;
                 const moveVec = awayDir.clone().multiplyScalar(baseSpeed)
                     .add(perpDir.clone().multiplyScalar(dodgeOffset))
                     .add(new THREE.Vector2(repulseX, repulseZ));
@@ -3049,10 +3130,20 @@ class ThreeManager {
                     newZ = Math.sin(angle) * circleMaxRadius;
                 }
 
-                c.lookAt(newX + moveVec.x * 2, 1, newZ + moveVec.y * 2);
+                c.position.x = newX;
+                c.position.z = newZ;
 
-                // Body banking roll into sharp evasive turns
-                c.rotation.z = -dodgeOffset * 0.32;
+                // Smooth character facing angle without sudden jerks
+                if (moveVec.lengthSq() > 0.001) {
+                    const targetAngle = Math.atan2(moveVec.x, moveVec.y);
+                    let diff = targetAngle - c.rotation.y;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    c.rotation.y += diff * 0.25;
+                }
+
+                // Gentle body banking roll into evasive turns
+                c.rotation.z = -dodgeOffset * 0.10;
 
                 // Panicked backward glance towards IT
                 if (Math.random() < 0.012 && c.userData.parts?.head && !c.userData.isGlancing) {
@@ -3386,7 +3477,7 @@ class ThreeManager {
             });
         }
         
-        this.onStateChange({ phase: 'SPINNING', round: roundData.roundNum, msg: 'CLICK PLATFORM TO SPIN', isMusicPlaying: true });
+        this.onStateChange({ phase: 'SPINNING', round: roundData.roundNum, msg: `ROUND ${roundData.roundNum}`, isMusicPlaying: false });
         
         // Wait for user to manually spin and finish spinning
         await new Promise<void>(resolve => {
@@ -3875,7 +3966,7 @@ const StudentManager = ({ students, setStudents, onBack }: any) => {
     );
 };
 
-const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: boolean }) => {
+const TagMusicPlayer = ({ isPlaying, isMuted, volume = 80 }: { isPlaying: boolean; isMuted: boolean; volume?: number }) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [mounted, setMounted] = useState(false);
 
@@ -3898,11 +3989,11 @@ const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: b
     }, [isPlaying]);
 
     const handleIframeLoad = () => {
-        if (isPlaying && !isMuted) {
+        if (isPlaying && !isMuted && volume > 0) {
             sendCommand('unMute');
-            sendCommand('setVolume', [80]);
+            sendCommand('setVolume', [volume]);
             sendCommand('playVideo');
-        } else if (isPlaying && isMuted) {
+        } else if (isPlaying && (isMuted || volume === 0)) {
             sendCommand('mute');
             sendCommand('playVideo');
         } else {
@@ -3912,17 +4003,17 @@ const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: b
 
     useEffect(() => {
         if (!iframeRef.current || !mounted) return;
-        if (isPlaying && !isMuted) {
+        if (isPlaying && !isMuted && volume > 0) {
             sendCommand('unMute');
-            sendCommand('setVolume', [80]);
+            sendCommand('setVolume', [volume]);
             sendCommand('playVideo');
-        } else if (isPlaying && isMuted) {
+        } else if (isPlaying && (isMuted || volume === 0)) {
             sendCommand('mute');
             sendCommand('playVideo');
         } else {
             sendCommand('pauseVideo');
         }
-    }, [isPlaying, isMuted, mounted]);
+    }, [isPlaying, isMuted, volume, mounted]);
 
     if (!mounted) return null;
 
@@ -3954,7 +4045,7 @@ const TagMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: b
     );
 };
 
-const MingleMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted: boolean }) => {
+const MingleMusicPlayer = ({ isPlaying, isMuted, volume = 80 }: { isPlaying: boolean; isMuted: boolean; volume?: number }) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [mounted, setMounted] = useState(false);
 
@@ -3977,11 +4068,11 @@ const MingleMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted
     }, [isPlaying]);
 
     const handleIframeLoad = () => {
-        if (isPlaying && !isMuted) {
+        if (isPlaying && !isMuted && volume > 0) {
             sendCommand('unMute');
-            sendCommand('setVolume', [80]);
+            sendCommand('setVolume', [volume]);
             sendCommand('playVideo');
-        } else if (isPlaying && isMuted) {
+        } else if (isPlaying && (isMuted || volume === 0)) {
             sendCommand('mute');
             sendCommand('playVideo');
         } else {
@@ -3991,17 +4082,17 @@ const MingleMusicPlayer = ({ isPlaying, isMuted }: { isPlaying: boolean; isMuted
 
     useEffect(() => {
         if (!iframeRef.current || !mounted) return;
-        if (isPlaying && !isMuted) {
+        if (isPlaying && !isMuted && volume > 0) {
             sendCommand('unMute');
-            sendCommand('setVolume', [80]);
+            sendCommand('setVolume', [volume]);
             sendCommand('playVideo');
-        } else if (isPlaying && isMuted) {
+        } else if (isPlaying && (isMuted || volume === 0)) {
             sendCommand('mute');
             sendCommand('playVideo');
         } else {
             sendCommand('pauseVideo');
         }
-    }, [isPlaying, isMuted, mounted]);
+    }, [isPlaying, isMuted, volume, mounted]);
 
     if (!mounted) return null;
 
@@ -4053,11 +4144,59 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
     const isFirstMountRef = useRef(true);
     const isAudioMuted = useRef(false);
     const [muteUI, setMuteUI] = useState(false);
-    const [userMusicEnabled, setUserMusicEnabled] = useState(true);
+    const [volume, setVolume] = useState<number>(80);
+    const [showVolumeSlider, setShowVolumeSlider] = useState<boolean>(false);
+    const gameVolumeRef = useRef<HTMLDivElement>(null);
+    const homeVolumeRef = useRef<HTMLDivElement>(null);
+    const nextRoundResolverRef = useRef<(() => void) | null>(null);
 
-    const toggleMusic = () => {
-        setUserMusicEnabled(prev => !prev);
+    const handleVolumeChange = (newVal: number) => {
+        setVolume(newVal);
+        if (newVal === 0) {
+            setMuteUI(true);
+            if (globalAudio) globalAudio.setMuted(true);
+        } else {
+            if (muteUI) {
+                setMuteUI(false);
+                if (globalAudio) globalAudio.setMuted(false);
+            }
+            if (globalAudio) globalAudio.setVolume(newVal / 100);
+        }
     };
+
+    const toggleMute = () => {
+        if (muteUI || volume === 0) {
+            setMuteUI(false);
+            if (globalAudio) globalAudio.setMuted(false);
+            if (volume === 0) {
+                setVolume(80);
+                if (globalAudio) globalAudio.setVolume(0.8);
+            } else {
+                if (globalAudio) globalAudio.setVolume(volume / 100);
+            }
+        } else {
+            setMuteUI(true);
+            if (globalAudio) globalAudio.setMuted(true);
+        }
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (
+                (!gameVolumeRef.current || !gameVolumeRef.current.contains(target)) &&
+                (!homeVolumeRef.current || !homeVolumeRef.current.contains(target))
+            ) {
+                setShowVolumeSlider(false);
+            }
+        };
+        if (showVolumeSlider) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showVolumeSlider]);
 
     useEffect(() => {
         if (!globalAudio) {
@@ -4098,15 +4237,18 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
 
     useEffect(() => {
         const timeouts: (ReturnType<typeof setTimeout>)[] = [];
+        // Only announce if there are 3 or fewer players eliminated to prevent auditory overload
         if (gameState.phase === 'WINNER' && gameMode === 'picker') {
-            chosenOnes.forEach((name, idx) => {
-                timeouts.push(setTimeout(() => {
-                    const pNum = getPlayerNumber(name);
-                    announce(`Player ${pNum}, eliminated.`);
-                }, idx * 1500));
-            });
+            if (chosenOnes.length <= 3) {
+                chosenOnes.forEach((name, idx) => {
+                    timeouts.push(setTimeout(() => {
+                        const pNum = getPlayerNumber(name);
+                        announce(`Player ${pNum}, eliminated.`);
+                    }, idx * 1500));
+                });
+            }
         } else if (gameState.phase === 'ELIMINATED' && gameMode === 'survival') {
-            if (gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0) {
+            if (gameState.eliminatedThisRound && gameState.eliminatedThisRound.length > 0 && gameState.eliminatedThisRound.length <= 3) {
                 gameState.eliminatedThisRound.forEach((name: string, idx: number) => {
                     timeouts.push(setTimeout(() => {
                         const pNum = getPlayerNumber(name);
@@ -4174,13 +4316,6 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         }
     };
 
-    const toggleMute = () => {
-        if (globalAudio) {
-            isAudioMuted.current = globalAudio.toggleMute();
-            setMuteUI(isAudioMuted.current);
-        }
-    };
-
     const startGameWith = async (roster: string[]) => {
         stopAnnounce();
         if(roster.length < (gameMode === 'picker' ? pickCount + 1 : 2)) {
@@ -4215,14 +4350,22 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         for (let i = 0; i < engine.rounds.length; i++) {
             const round = engine.rounds[i];
             
-            setGameState({ phase: 'SETUP', msg: `ROUND ${round.roundNum}`, eliminatedThisRound: [], isMusicPlaying: false });
-            await new Promise(r => setTimeout(r, 1500));
-            
             await tm.playRound(round);
             
             if (i < engine.rounds.length - 1) {
-                 setGameState({ phase: 'SETUP', msg: `${round.survivors.length} PLAYERS REMAIN`, eliminatedThisRound: [], isMusicPlaying: false });
-                 await new Promise(r => setTimeout(r, 2000));
+                 setGameState({ 
+                     phase: 'ROUND_INTERMISSION', 
+                     msg: `${round.survivors.length} PLAYERS REMAIN`, 
+                     eliminatedThisRound: round.eliminated, 
+                     isMusicPlaying: false,
+                     nextRoundNum: round.roundNum + 1,
+                     totalRounds: engine.rounds.length
+                 });
+                 
+                 // Wait for user to explicitly click to start next round!
+                 await new Promise<void>(resolve => {
+                     nextRoundResolverRef.current = resolve;
+                 });
             }
         }
 
@@ -4259,6 +4402,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
 
     const resetGame = () => {
         stopAnnounce();
+        if (nextRoundResolverRef.current) {
+            nextRoundResolverRef.current();
+            nextRoundResolverRef.current = null;
+        }
         setGameState({ phase: 'IDLE', msg: '', eliminatedThisRound: [], isMusicPlaying: false });
         setView('home');
         setChosenOnes([]);
@@ -4415,19 +4562,6 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                 </div>
                 
                 <div className="flex gap-3 pointer-events-auto">
-                    {onViewChange && (
-                        <button 
-                            onClick={() => {
-                                stopAnnounce();
-                                onViewChange('home');
-                            }}
-                            className="h-12 px-4 bg-slate-900/90 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
-                            title="Back to Studio"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            <span className="hidden sm:inline">Studio</span>
-                        </button>
-                    )}
                     <button 
                         onClick={toggleFullscreen} 
                         className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
@@ -4435,26 +4569,57 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                     >
                         {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
                     </button>
-                    <button
-                        onClick={toggleMusic}
-                        className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
-                            userMusicEnabled && Boolean(gameState.isMusicPlaying) && !muteUI
-                                ? 'border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse'
-                                : userMusicEnabled
-                                ? 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
-                                : 'border-red-900/60 text-red-500 hover:bg-slate-800'
-                        }`}
-                        title={
-                            userMusicEnabled
-                                ? (gameState.isMusicPlaying ? "Music Playing • Click to Stop Music" : "Music Enabled • Plays during Game")
-                                : "Music Stopped • Click to Enable Music"
-                        }
-                    >
-                        <Music className={`w-5 h-5 ${userMusicEnabled && Boolean(gameState.isMusicPlaying) && !muteUI ? 'scale-110' : ''}`} />
-                    </button>
-                    <button onClick={toggleMute} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-slate-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg" title={muteUI ? "Unmute Sound" : "Mute Sound"}>
-                        {muteUI ? <VolumeX className="text-red-500" /> : <Volume2 className="text-emerald-400" />}
-                    </button>
+
+                    <div className="relative" ref={gameVolumeRef}>
+                        <button
+                            onClick={() => setShowVolumeSlider(prev => !prev)}
+                            className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
+                                showVolumeSlider
+                                    ? 'border-emerald-400 bg-slate-800 text-emerald-400 ring-2 ring-emerald-500/30'
+                                    : muteUI || volume === 0
+                                    ? 'border-red-900/70 text-red-500 hover:bg-slate-800'
+                                    : 'border-slate-700 text-emerald-400 hover:text-white hover:bg-slate-700'
+                            }`}
+                            title="Volume Control"
+                        >
+                            {muteUI || volume === 0 ? (
+                                <VolumeX className="w-5 h-5 text-red-500" />
+                            ) : volume < 40 ? (
+                                <Volume1 className="w-5 h-5 text-emerald-400" />
+                            ) : (
+                                <Volume2 className="w-5 h-5 text-emerald-400" />
+                            )}
+                        </button>
+
+                        {showVolumeSlider && (
+                            <div className="absolute right-0 top-14 bg-slate-900/95 backdrop-blur-md border-2 border-slate-700 shadow-2xl rounded-2xl p-3.5 flex items-center gap-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                <button
+                                    onClick={toggleMute}
+                                    className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800"
+                                    title={muteUI || volume === 0 ? "Unmute" : "Mute"}
+                                >
+                                    {muteUI || volume === 0 ? (
+                                        <VolumeX className="w-4 h-4 text-red-400" />
+                                    ) : (
+                                        <Volume2 className="w-4 h-4 text-emerald-400" />
+                                    )}
+                                </button>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={muteUI ? 0 : volume}
+                                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                                    className="w-28 sm:w-36 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                                />
+                                <span className="text-xs font-bold text-slate-300 w-8 text-right font-mono select-none">
+                                    {muteUI ? '0%' : `${volume}%`}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
                     <button onClick={resetGame} className="w-12 h-12 bg-slate-900/90 rounded-full text-white hover:bg-rose-600 hover:border-rose-700 transition border-2 border-slate-700 flex items-center justify-center shadow-lg" title="Reset Game">
                         <Power />
                     </button>
@@ -4493,37 +4658,109 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                 </div>
             )}
 
+            {/* Tag in-game manual start button: only clicks start chase & music */}
+            {activeGame === 'tag' && gameState.phase === 'TAG_READY' && (
+                <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 pointer-events-auto z-30 flex flex-col items-center">
+                    <button
+                        onClick={() => threeManagerRef.current?.startTagChase()}
+                        className="px-10 py-4 bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white rounded-2xl font-black text-2xl tracking-wider shadow-[0_0_50px_rgba(244,63,94,0.7)] border-4 border-rose-300/80 flex items-center gap-3 active:scale-95 hover:scale-105 transition-all cursor-pointer animate-pulse"
+                        style={{ fontFamily: "'Fredoka', sans-serif" }}
+                    >
+                        <Play className="w-8 h-8 fill-white text-white" />
+                        START CHASE
+                    </button>
+                </div>
+            )}
+
+            {/* Mingle in-game manual spin button: only clicks start platform spin & music */}
+            {activeGame === 'mingle' && gameState.phase === 'SPINNING' && (
+                <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 pointer-events-auto z-30 flex flex-col items-center">
+                    <button
+                        onClick={() => threeManagerRef.current?.manualSpin()}
+                        className="px-10 py-4 bg-gradient-to-r from-rose-600 via-emerald-600 to-teal-500 hover:from-rose-500 hover:to-emerald-400 text-white rounded-2xl font-black text-2xl tracking-wider shadow-[0_0_50px_rgba(244,63,94,0.7)] border-4 border-rose-300/80 flex items-center gap-3 active:scale-95 hover:scale-105 transition-all cursor-pointer animate-pulse"
+                        style={{ fontFamily: "'Fredoka', sans-serif" }}
+                    >
+                        <Play className="w-8 h-8 fill-white text-white" />
+                        CLICK TO SPIN
+                    </button>
+                </div>
+            )}
+
+            {/* Intermission button: between rounds, click to advance to the next round */}
+            {gameState.phase === 'ROUND_INTERMISSION' && (
+                <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 pointer-events-auto z-30 flex flex-col items-center">
+                    <button
+                        onClick={() => {
+                            if (nextRoundResolverRef.current) {
+                                const res = nextRoundResolverRef.current;
+                                nextRoundResolverRef.current = null;
+                                res();
+                            }
+                        }}
+                        className="px-10 py-4 bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 hover:from-emerald-500 hover:to-cyan-400 text-white rounded-2xl font-black text-2xl tracking-wider shadow-[0_0_50px_rgba(16,185,129,0.7)] border-4 border-emerald-300/80 flex items-center gap-3 active:scale-95 hover:scale-105 transition-all cursor-pointer animate-pulse"
+                        style={{ fontFamily: "'Fredoka', sans-serif" }}
+                    >
+                        <Play className="w-8 h-8 fill-white text-white" />
+                        START ROUND {gameState.nextRoundNum || ''}
+                    </button>
+                </div>
+            )}
+
             {gameState.phase === 'WINNER' && (
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full text-center pointer-events-auto">
-                    <div className="inline-block bg-slate-900/95 border-4 border-rose-600 px-20 py-12 rounded-[2rem] shadow-[0_0_100px_rgba(244,63,94,0.6)] relative overflow-hidden min-w-[600px] transition-transform animate-fade-in">
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-rose-900/30 to-transparent"></div>
+                <div className="absolute inset-0 z-40 flex items-center justify-center p-4 sm:p-6 md:p-8 pointer-events-auto">
+                    <div className="w-full max-w-6xl max-h-[92vh] flex flex-col bg-slate-900/95 border-4 border-rose-600 p-6 sm:p-8 md:p-10 rounded-[2rem] shadow-[0_0_100px_rgba(244,63,94,0.6)] relative overflow-hidden transition-transform animate-fade-in backdrop-blur-xl">
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-rose-900/30 to-transparent pointer-events-none"></div>
                         
-                        <div className="text-rose-500 text-6xl mb-4 relative z-10 flex justify-center">
-                            {gameMode === 'picker' ? <Skull className="w-16 h-16" /> : <Crown className="w-16 h-16 text-emerald-400" />}
+                        <div className="text-rose-500 text-5xl sm:text-6xl mb-2 relative z-10 flex justify-center shrink-0">
+                            {gameMode === 'picker' ? <Skull className="w-12 h-12 sm:w-16 sm:h-16" /> : <Crown className="w-12 h-12 sm:w-16 sm:h-16 text-emerald-400" />}
                         </div>
                         
-                        <h2 className="text-2xl text-emerald-400 font-bold mb-6 tracking-widest relative z-10">
-                            {gameMode === 'picker' ? (chosenOnes.length > 1 ? 'PLAYERS ELIMINATED' : 'PLAYER ELIMINATED') : 'SOLE SURVIVOR'}
+                        <h2 className="text-xl sm:text-2xl text-emerald-400 font-bold mb-4 tracking-widest text-center uppercase relative z-10 shrink-0">
+                            {gameMode === 'picker' ? (chosenOnes.length > 1 ? `${chosenOnes.length} PLAYERS ELIMINATED` : 'PLAYER ELIMINATED') : 'SOLE SURVIVOR'}
                         </h2>
                         
-                        <div className="flex flex-col gap-6 mb-10 relative z-10">
+                        <div className={`grid gap-3 sm:gap-4 my-2 relative z-10 overflow-y-auto pr-1 max-h-[58vh] ${
+                            chosenOnes.length === 1 
+                                ? 'grid-cols-1 max-w-xl mx-auto w-full' 
+                                : chosenOnes.length <= 4 
+                                    ? 'grid-cols-1 sm:grid-cols-2' 
+                                    : chosenOnes.length <= 8 
+                                        ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' 
+                                        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                        }`}>
                             {chosenOnes.map((name, i) => {
                                 const playerNum = getPlayerNumber(name);
                                 const playerAvatar = threeManagerRef.current?.getPlayerAvatar(name, playerNum) || 
                                                      generateStaticPlayerAvatar(name, playerNum);
                                 return (
-                                    <div key={i} className="flex items-center gap-6 bg-slate-950/80 p-6 rounded-2xl border-2 border-slate-700/80 shadow-2xl backdrop-blur-md">
-                                        <div className={`w-28 h-28 sm:w-32 sm:h-32 shrink-0 rounded-2xl bg-slate-900 border-2 overflow-hidden flex items-center justify-center relative shadow-[0_0_30px_rgba(244,63,94,0.45)] ${gameMode === "picker" ? "border-rose-500" : "border-emerald-500"}`}>
+                                    <div key={i} className={`flex items-center gap-3.5 bg-slate-950/85 rounded-2xl border-2 border-slate-700/80 shadow-lg backdrop-blur-md transition-all hover:border-rose-500/60 ${
+                                        chosenOnes.length <= 2 ? 'p-5 sm:p-6' : chosenOnes.length <= 6 ? 'p-3.5 sm:p-4' : 'p-2.5 sm:p-3'
+                                    }`}>
+                                        <div className={`shrink-0 rounded-xl bg-slate-900 border-2 overflow-hidden flex items-center justify-center relative shadow-md ${
+                                            gameMode === "picker" ? "border-rose-500" : "border-emerald-500"
+                                        } ${
+                                            chosenOnes.length <= 2 
+                                                ? 'w-20 h-20 sm:w-24 sm:h-24' 
+                                                : chosenOnes.length <= 6 
+                                                    ? 'w-14 h-14 sm:w-16 sm:h-16' 
+                                                    : 'w-11 h-11 sm:w-12 sm:h-12'
+                                        }`}>
                                             <img src={playerAvatar} alt={name} className="w-full h-full object-cover" />
-                                            <div className="absolute bottom-1.5 right-1.5 bg-black/85 backdrop-blur-sm border border-emerald-500/50 px-2 py-0.5 rounded-md text-[11px] font-mono font-bold text-emerald-400">
+                                            <div className="absolute bottom-0.5 right-0.5 bg-black/85 backdrop-blur-sm border border-emerald-500/50 px-1 py-0.2 rounded text-[9px] font-mono font-bold text-emerald-400">
                                                 #{playerNum}
                                             </div>
                                         </div>
-                                        <div className="flex-1 text-left">
-                                            <div className="text-xl text-rose-300 font-bold mb-2 tracking-widest uppercase">
+                                        <div className="flex-1 min-w-0 text-left">
+                                            <div className="text-[11px] sm:text-xs text-rose-300 font-bold tracking-widest uppercase truncate">
                                                 PLAYER #{playerNum}
                                             </div>
-                                            <div className="text-4xl sm:text-5xl text-white font-bold text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-300 uppercase tracking-wide" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                            <div className={`text-white font-bold truncate tracking-wide ${
+                                                chosenOnes.length <= 2 
+                                                    ? 'text-2xl sm:text-3xl' 
+                                                    : chosenOnes.length <= 6 
+                                                        ? 'text-lg sm:text-xl' 
+                                                        : 'text-sm sm:text-base'
+                                            }`} style={{fontFamily: "'Fredoka', sans-serif"}}>
                                                 {name}
                                             </div>
                                         </div>
@@ -4532,9 +4769,11 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                             })}
                         </div>
                         
-                        <Button size="lg" variant={gameMode === 'picker' ? 'primary' : 'success'} onClick={continueGame} className="mx-auto relative z-10 w-full shadow-[0_0_30px_rgba(16,185,129,0.5)] uppercase tracking-widest text-xl h-16 rounded-2xl font-black">
-                            <RotateCcw className="w-6 h-6 mr-3" /> CONTINUE
-                        </Button>
+                        <div className="pt-4 mt-auto relative z-10 shrink-0">
+                            <Button size="lg" variant={gameMode === 'picker' ? 'primary' : 'success'} onClick={continueGame} className="mx-auto w-full shadow-[0_0_30px_rgba(16,185,129,0.5)] uppercase tracking-widest text-lg sm:text-xl h-14 sm:h-16 rounded-2xl font-black">
+                                <RotateCcw className="w-6 h-6 mr-3" /> CONTINUE
+                            </Button>
+                        </div>
                     </div>
                 </div>
             )}
@@ -4556,16 +4795,18 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             {/* YouTube Audio Player for Tag Game */}
             {activeGame === 'tag' && (
                 <TagMusicPlayer
-                    isPlaying={userMusicEnabled && !muteUI && Boolean(gameState.isMusicPlaying) && view === 'game'}
-                    isMuted={muteUI}
+                    isPlaying={!muteUI && volume > 0 && Boolean(gameState.isMusicPlaying) && view === 'game'}
+                    isMuted={muteUI || volume === 0}
+                    volume={volume}
                 />
             )}
 
             {/* YouTube Audio Player for Mingle Game */}
             {activeGame === 'mingle' && (
                 <MingleMusicPlayer
-                    isPlaying={userMusicEnabled && !muteUI && Boolean(gameState.isMusicPlaying) && view === 'game'}
-                    isMuted={muteUI}
+                    isPlaying={!muteUI && volume > 0 && Boolean(gameState.isMusicPlaying) && view === 'game'}
+                    isMuted={muteUI || volume === 0}
+                    volume={volume}
                 />
             )}
 
@@ -4643,19 +4884,6 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                 <div className="flex-1 relative">
                     {(view === 'home' || view === 'students') && (
                         <div className="absolute top-6 right-6 z-40 flex items-center gap-3 pointer-events-auto">
-                            {onViewChange && (
-                                <button
-                                    onClick={() => {
-                                        stopAnnounce();
-                                        onViewChange('home');
-                                    }}
-                                    className="h-12 px-4 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center gap-2 shadow-lg text-sm font-semibold"
-                                    title="Back to Studio"
-                                >
-                                    <ArrowLeft className="w-4 h-4" />
-                                    <span>Studio</span>
-                                </button>
-                            )}
                             <button
                                 onClick={toggleFullscreen}
                                 className="w-12 h-12 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
@@ -4663,24 +4891,56 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                             >
                                 {isFullscreen ? <Minimize className="w-5 h-5 text-emerald-400" /> : <Maximize className="w-5 h-5 text-slate-200" />}
                             </button>
-                            <button
-                                onClick={toggleMusic}
-                                className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
-                                    userMusicEnabled
-                                        ? 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
-                                        : 'border-red-900/60 text-red-500 hover:bg-slate-800'
-                                }`}
-                                title={userMusicEnabled ? "Music Enabled • Click to Stop Music" : "Music Stopped • Click to Enable Music"}
-                            >
-                                <Music className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={toggleMute}
-                                className="w-12 h-12 bg-slate-900/90 hover:bg-slate-700 rounded-full text-white transition border-2 border-slate-700 flex items-center justify-center shadow-lg"
-                                title={muteUI ? "Unmute Sound" : "Mute Sound"}
-                            >
-                                {muteUI ? <VolumeX className="w-5 h-5 text-red-500" /> : <Volume2 className="w-5 h-5 text-emerald-400" />}
-                            </button>
+
+                            <div className="relative" ref={homeVolumeRef}>
+                                <button
+                                    onClick={() => setShowVolumeSlider(prev => !prev)}
+                                    className={`w-12 h-12 bg-slate-900/90 rounded-full transition border-2 flex items-center justify-center shadow-lg ${
+                                        showVolumeSlider
+                                            ? 'border-emerald-400 bg-slate-800 text-emerald-400 ring-2 ring-emerald-500/30'
+                                            : muteUI || volume === 0
+                                            ? 'border-red-900/70 text-red-500 hover:bg-slate-800'
+                                            : 'border-slate-700 text-emerald-400 hover:text-white hover:bg-slate-700'
+                                    }`}
+                                    title="Volume Control"
+                                >
+                                    {muteUI || volume === 0 ? (
+                                        <VolumeX className="w-5 h-5 text-red-500" />
+                                    ) : volume < 40 ? (
+                                        <Volume1 className="w-5 h-5 text-emerald-400" />
+                                    ) : (
+                                        <Volume2 className="w-5 h-5 text-emerald-400" />
+                                    )}
+                                </button>
+
+                                {showVolumeSlider && (
+                                    <div className="absolute right-0 top-14 bg-slate-900/95 backdrop-blur-md border-2 border-slate-700 shadow-2xl rounded-2xl p-3.5 flex items-center gap-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                                        <button
+                                            onClick={toggleMute}
+                                            className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-slate-800"
+                                            title={muteUI || volume === 0 ? "Unmute" : "Mute"}
+                                        >
+                                            {muteUI || volume === 0 ? (
+                                                <VolumeX className="w-4 h-4 text-red-400" />
+                                            ) : (
+                                                <Volume2 className="w-4 h-4 text-emerald-400" />
+                                            )}
+                                        </button>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="1"
+                                            value={muteUI ? 0 : volume}
+                                            onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                                            className="w-28 sm:w-36 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                                        />
+                                        <span className="text-xs font-bold text-slate-300 w-8 text-right font-mono select-none">
+                                            {muteUI ? '0%' : `${volume}%`}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
                     {view === 'home' && renderHome()}
