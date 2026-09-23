@@ -884,6 +884,7 @@ class ThreeManager {
     tagTimer: number = 15;
     activeChaseInterval: any = null;
     stopEvasion: (() => void) | null = null;
+    mingleSpinCount: number = 0;
     currentCamLookAt: THREE.Vector3 = new THREE.Vector3(0, 0, 1.5);
     tagCamTargetPos: THREE.Vector3 | null = null;
     tagCamTargetLook: THREE.Vector3 | null = null;
@@ -1431,6 +1432,7 @@ class ThreeManager {
         if (type === 'mingle') {
             this.tagRoundCount = 0;
             this.lastCaughtPlayer = null;
+            this.mingleSpinCount = 0;
         }
         if (this.mingleEnvGroup) this.mingleEnvGroup.visible = (type === 'mingle');
         if (this.tagEnvGroup) this.tagEnvGroup.visible = (type === 'tag');
@@ -1523,7 +1525,13 @@ class ThreeManager {
             this.spinTarget = this.innerPlatform.rotation.y;
         }
         
-        this.spinTarget += Math.PI * 4; 
+        const isFirstSpin = (this.mingleSpinCount === 0);
+        this.mingleSpinCount++;
+
+        const spinDuration = isFirstSpin ? 10.0 : 3.0;
+        const spinRadianAddition = isFirstSpin ? Math.PI * 16 : Math.PI * 4;
+
+        this.spinTarget += spinRadianAddition; 
         
         const ytPlayer = document.getElementById('yt-player') as HTMLIFrameElement;
         if (ytPlayer && ytPlayer.contentWindow) {
@@ -1537,8 +1545,8 @@ class ThreeManager {
         
         gsap.to(this.innerPlatform.rotation, {
             y: this.spinTarget,
-            duration: 2.5,
-            ease: "power2.out",
+            duration: spinDuration,
+            ease: isFirstSpin ? "power1.inOut" : "power2.out",
             overwrite: true,
             onComplete: () => {
                 if (this.waitingForSpinResolve) {
@@ -1547,7 +1555,7 @@ class ThreeManager {
                             this.waitingForSpinResolve();
                             this.waitingForSpinResolve = null;
                         }
-                    }, 1000);
+                    }, 800);
                 }
             }
         });
@@ -2947,22 +2955,30 @@ class ThreeManager {
             itChar.userData.isCustomArmAnim = false;
         }
 
-        // Place other players in the far opposite side of the circle
+        // Place other players naturally dispersed around the wide arena ring (so they are spread out rather than huddled in one clump)
         const others = isFirstGame ? roundData.activePlayers : roundData.activePlayers.filter((p: string) => p !== itName);
         const nOthers = others.length;
         others.forEach((name: string, i: number) => {
             const c = this.characters[name];
             if (c) {
+                // Distribute across the upper 240 degrees (avoiding right next to IT at (0, 1, 17))
+                const angleSpread = Math.PI * 1.35;
+                const startAngle = Math.PI * 0.5 - angleSpread / 2;
                 const t = nOthers > 1 ? i / (nOthers - 1) : 0.5;
-                const baseAngle = Math.PI * (0.58 + 0.84 * t);
-                const ringTier = i % 4;
-                const baseRadius = ringTier === 0 ? 8.5 : ringTier === 1 ? 13.5 : ringTier === 2 ? 18.0 : 11.0;
-                const r = Math.min(21.0, Math.max(6.5, baseRadius + ((i * 3.7) % 2.5) - 1.25));
-                const px = Math.cos(baseAngle) * r;
-                const pz = Math.sin(baseAngle) * r;
+                const jitterAngle = ((i * 13) % 7 - 3) * 0.04;
+                const angle = startAngle + t * angleSpread + jitterAngle;
+                
+                const ringTier = i % 3;
+                const baseRadius = ringTier === 0 ? 11.0 : ringTier === 1 ? 15.5 : 19.5;
+                const jitterR = ((i * 17) % 5 - 2) * 0.6;
+                const r = Math.min(21.5, Math.max(8.5, baseRadius + jitterR));
+                
+                const px = Math.cos(angle) * r;
+                const pz = -Math.abs(Math.sin(angle) * r) * 0.95; // mostly across negative Z (opposite IT)
+                
                 c.position.set(px, 1, pz);
                 c.rotation.set(0, 0, 0);
-                c.lookAt(0, 1, 10);
+                c.lookAt(0, 1, 12);
                 c.userData.isAlive = true;
                 c.userData.isMoving = false;
                 c.userData.wasTagged = false;
@@ -3207,9 +3223,15 @@ class ThreeManager {
             itChar.userData.isMoving = true;
             this.onStateChange({ isMusicPlaying: true });
 
+            // Random decoy diversions: Pick 1 to 3 other alive players that IT briefly lunges/feints toward before locking in on victim
+            const aliveDecoys = others.filter((n: string) => n !== victimName && this.characters[n]?.userData.isAlive);
+            const shuffledDecoys = [...aliveDecoys].sort(() => Math.random() - 0.5).slice(0, Math.min(3, aliveDecoys.length));
+
             await new Promise<void>((resolveCatch) => {
                 const chaseStart = Date.now();
                 let lastReportedSec = -1;
+                let activeChaseTargetName = shuffledDecoys.length > 0 ? shuffledDecoys[0] : victimName;
+                let currentFacingAngle = itChar.rotation.y;
 
                 const chaseInterval = setInterval(() => {
                     if (!itChar || !victimChar) {
@@ -3232,18 +3254,47 @@ class ThreeManager {
 
                     itChar.userData.moveTime = (itChar.userData.moveTime || 0) + 0.08;
 
-                    const targetX = victimChar.position.x;
-                    const targetZ = victimChar.position.z;
+                    // Unpredictable dynamic targeting schedule:
+                    // - 0% to ~28%: Lunge at Decoy 1 (if available)
+                    // - ~28% to ~55%: Swerve and feint toward Decoy 2 (or 1)
+                    // - >= 55%: Unrelentingly lock onto the actual victim for the climax!
+                    if (progress < 0.28 && shuffledDecoys.length > 0) {
+                        activeChaseTargetName = shuffledDecoys[0];
+                    } else if (progress < 0.55 && shuffledDecoys.length > 1) {
+                        activeChaseTargetName = shuffledDecoys[1];
+                    } else {
+                        activeChaseTargetName = victimName;
+                    }
+
+                    const activeTargetChar = this.characters[activeChaseTargetName] || victimChar;
+                    const isFocusingActualVictim = (activeChaseTargetName === victimName);
+
+                    const targetX = activeTargetChar.position.x;
+                    const targetZ = activeTargetChar.position.z;
                     const dx = targetX - itChar.position.x;
                     const dz = targetZ - itChar.position.z;
-                    const dist = Math.sqrt(dx * dx + dz * dz);
+                    const distToActive = Math.sqrt(dx * dx + dz * dz);
 
-                    itChar.lookAt(targetX, 1, targetZ);
+                    // Distance to actual victim (for camera and catch trigger)
+                    const distToVictim = Math.sqrt(
+                        (victimChar.position.x - itChar.position.x) * (victimChar.position.x - itChar.position.x) +
+                        (victimChar.position.z - itChar.position.z) * (victimChar.position.z - itChar.position.z)
+                    );
+
+                    // Smooth turning toward whichever player IT is currently menacing
+                    if (distToActive > 0.1) {
+                        const desiredAngle = Math.atan2(dx, dz);
+                        let angleDiff = desiredAngle - currentFacingAngle;
+                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                        currentFacingAngle += angleDiff * 0.18;
+                        itChar.rotation.y = currentFacingAngle;
+                    }
 
                     // Immersive Stable Progressive Camera: Gently zooms closer synchronized with timer without fast panning or spinning
                     if (this.camera) {
-                        const midX = (itChar.position.x + victimChar.position.x) * 0.5;
-                        const midZ = (itChar.position.z + victimChar.position.z) * 0.5;
+                        const midX = (itChar.position.x + activeTargetChar.position.x) * 0.5;
+                        const midZ = (itChar.position.z + activeTargetChar.position.z) * 0.5;
 
                         const container = document.getElementById(this.containerId);
                         const width = container?.clientWidth || window.innerWidth;
@@ -3258,16 +3309,16 @@ class ThreeManager {
                         const zoomFactor = 1.0 - (0.24 * Math.pow(progress, 0.9));
 
                         // Stable overhead vantage point: gentle X tracking clamped to ±5 units so names remain clear and readable
-                        const targetX = Math.max(-5, Math.min(5, midX * 0.18));
-                        const targetY = baseY * zoomFactor;
-                        const targetZ = baseZ * zoomFactor;
+                        const camX = Math.max(-5, Math.min(5, midX * 0.18));
+                        const camY = baseY * zoomFactor;
+                        const camZ = baseZ * zoomFactor;
 
                         // Clamped smooth lookAt target centered on chase action
                         const lookX = Math.max(-6, Math.min(6, midX * 0.35));
                         const lookZ = Math.max(-6, Math.min(6, midZ * 0.35 + 1.2));
                         const targetLook = new THREE.Vector3(lookX, 1.2, lookZ);
 
-                        this.tagCamTargetPos = new THREE.Vector3(targetX, targetY, targetZ);
+                        this.tagCamTargetPos = new THREE.Vector3(camX, camY, camZ);
                         this.tagCamTargetLook = targetLook;
                     }
 
@@ -3277,7 +3328,7 @@ class ThreeManager {
                     }
 
                     // IT reaches arms forward to touch/catch the player
-                    if (dist < 3.2 && dist > 1.35) {
+                    if (distToActive < 3.2 && distToActive > 1.35) {
                         if (itChar.userData.parts?.armR && itChar.userData.parts?.armL) {
                             itChar.userData.isCustomArmAnim = true;
                             gsap.to(itChar.userData.parts.armR.rotation, {
@@ -3304,26 +3355,35 @@ class ThreeManager {
 
                     // Pacing of IT:
                     let itSpeed = 0.25;
-                    if (progress < 0.85) {
-                        // Pursuit phase: stay on victim's heels
-                        if (dist > 5.5) {
-                            itSpeed = 0.34;
-                        } else if (dist > 3.8) {
-                            itSpeed = 0.25;
+                    if (progress < 0.55) {
+                        // Decoy pursuit phase: fast erratic dashes keeping all players on edge
+                        itSpeed = distToActive > 4.5 ? 0.32 : 0.24;
+                    } else if (progress < 0.85) {
+                        // Pursuit phase locked on real victim: stay on victim's heels
+                        if (distToVictim > 5.5) {
+                            itSpeed = 0.35;
+                        } else if (distToVictim > 3.8) {
+                            itSpeed = 0.26;
                         } else {
-                            itSpeed = 0.18;
+                            itSpeed = 0.20;
                         }
                     } else {
                         // Final stretch: surge to tag victim!
-                        itSpeed = 0.42 + (progress - 0.85) * 0.9;
+                        itSpeed = 0.44 + (progress - 0.85) * 0.9;
                     }
 
-                    // Contact condition:
-                    const isContact = (dist <= 1.35 && progress >= 0.80) || (progress >= 1.0 && dist <= 2.2) || elapsed >= (chaseDurationMs + 800);
+                    // Contact condition strictly for actual victim (or timeout finish):
+                    const isContact = isFocusingActualVictim && (
+                        (distToVictim <= 1.35 && progress >= 0.80) || 
+                        (progress >= 1.0 && distToVictim <= 2.2) || 
+                        elapsed >= (chaseDurationMs + 800)
+                    );
 
                     if (!isContact) {
-                        itChar.position.x += (dx / dist) * itSpeed;
-                        itChar.position.z += (dz / dist) * itSpeed;
+                        if (distToActive > 0.1) {
+                            itChar.position.x += (dx / distToActive) * itSpeed;
+                            itChar.position.z += (dz / distToActive) * itSpeed;
+                        }
                     } else {
                         // Contact! TOUCH / CATCH!
                         clearInterval(chaseInterval);
@@ -3355,9 +3415,12 @@ class ThreeManager {
                         }
 
                         // Victim stumbles forward from touch impact
+                        const impactDx = victimChar.position.x - itChar.position.x;
+                        const impactDz = victimChar.position.z - itChar.position.z;
+                        const impactDist = Math.max(0.1, Math.sqrt(impactDx * impactDx + impactDz * impactDz));
                         gsap.to(victimChar.position, {
-                            x: victimChar.position.x + (dx / dist) * 0.75,
-                            z: victimChar.position.z + (dz / dist) * 0.75,
+                            x: victimChar.position.x + (impactDx / impactDist) * 0.75,
+                            z: victimChar.position.z + (impactDz / impactDist) * 0.75,
                             duration: 0.25,
                             ease: "power1.out"
                         });
@@ -4332,9 +4395,10 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
         const tm = threeManagerRef.current;
         if(!tm) return;
         
-        // Reset Tag round state when starting so Round 1 is strictly the Squid Guard!
+        // Reset Tag and Mingle round state when starting
         tm.lastCaughtPlayer = null;
         tm.tagRoundCount = 0;
+        tm.mingleSpinCount = 0;
         tm.setTagTimer(tagTimer);
         
         // Spawn players before starting sequence in proper game type
