@@ -883,6 +883,7 @@ class ThreeManager {
     lastCaughtPlayer: string | null = null;
     tagTimer: number = 15;
     activeChaseInterval: any = null;
+    activeDoorCountdownInterval: any = null;
     stopEvasion: (() => void) | null = null;
     mingleSpinCount: number = 0;
     currentCamLookAt: THREE.Vector3 = new THREE.Vector3(0, 0, 1.5);
@@ -956,6 +957,10 @@ class ThreeManager {
         if (this.activeChaseInterval) {
             clearInterval(this.activeChaseInterval);
             this.activeChaseInterval = null;
+        }
+        if (this.activeDoorCountdownInterval) {
+            clearInterval(this.activeDoorCountdownInterval);
+            this.activeDoorCountdownInterval = null;
         }
         if (this.stopEvasion) {
             this.stopEvasion();
@@ -3547,7 +3552,7 @@ class ThreeManager {
             this.waitingForSpinResolve = resolve;
         });
 
-        this.onStateChange({ phase: 'DOORS', msg: 'CHOOSE A ROOM!', isMusicPlaying: true });
+        this.onStateChange({ phase: 'DOORS', msg: 'CHOOSE A ROOM!', isMusicPlaying: true, chaseSecondsLeft: 10 });
         globalAudio.play('pop', 300);
         
         this.doors.forEach(d => {
@@ -3569,6 +3574,22 @@ class ThreeManager {
             }
         });
 
+        // 10-second countdown in header HUD
+        let doorSecondsRemaining = 10;
+        if (this.activeDoorCountdownInterval) {
+            clearInterval(this.activeDoorCountdownInterval);
+        }
+        this.activeDoorCountdownInterval = setInterval(() => {
+            doorSecondsRemaining--;
+            if (doorSecondsRemaining >= 0) {
+                this.onStateChange({ chaseSecondsLeft: doorSecondsRemaining });
+            }
+            if (doorSecondsRemaining <= 0) {
+                clearInterval(this.activeDoorCountdownInterval);
+                this.activeDoorCountdownInterval = null;
+            }
+        }, 1000);
+
         const movePromises: Promise<void>[] = [];
         let isRunning = true;
         const footstepLoop = () => {
@@ -3578,38 +3599,62 @@ class ThreeManager {
         };
         footstepLoop();
 
+        const numDoorsTotal = this.doors.length;
+
         roundData.distribution.forEach((doorGroup: string[], doorIndex: number) => {
             const door = this.doors[doorIndex];
             const doorDir = door.group.position.clone().normalize();
-            const roomPos = door.group.position.clone().add(doorDir.multiplyScalar(3)); 
+            const roomPos = door.group.position.clone().add(doorDir.multiplyScalar(3.2)); 
 
-            doorGroup.forEach((playerName) => {
+            // Pick an alternate door across the arena for indecisive players who switch doors
+            const otherDoorIndex = (doorIndex + 1 + Math.floor(Math.random() * (numDoorsTotal - 1))) % numDoorsTotal;
+            const otherDoor = this.doors[otherDoorIndex];
+            const otherDoorDir = otherDoor.group.position.clone().normalize();
+            const otherRoomPos = otherDoor.group.position.clone().add(otherDoorDir.multiplyScalar(3.2));
+
+            doorGroup.forEach((playerName, playerIdxInDoor) => {
                 const char = this.characters[playerName];
                 if(!char) return;
                 
                 const isEliminated = roundData.eliminated.includes(playerName);
                 char.userData.isMoving = true;
 
-                let offset = new THREE.Vector3((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4);
+                const offset = new THREE.Vector3((Math.random() - 0.5) * 3.5, 0, (Math.random() - 0.5) * 3.5);
                 let finalPos = roomPos.clone().add(offset);
                 
-                // If eliminated, they don't make it to the door
+                // If eliminated, they get pulled out, trapped outside, or fall short
                 if (isEliminated) {
-                     finalPos = char.position.clone().lerp(roomPos, 0.3 + Math.random() * 0.3);
-                     finalPos.add(new THREE.Vector3((Math.random() - 0.5)*5, 0, (Math.random() - 0.5)*5));
+                     finalPos = char.position.clone().lerp(roomPos, 0.5 + Math.random() * 0.2);
+                     finalPos.add(new THREE.Vector3((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4));
                 }
                 
                 finalPos.y = 1;
-                char.lookAt(finalPos);
                 
-                const behaviorRand = Math.random();
+                // Assign rich dynamic behaviors across the 10-second window
+                // Behaviors:
+                // 1) 'pull_out': player enters door room, but gets violently pulled/shoved backward out into the hallway!
+                // 2) 'switch_door': player heads to wrong door first, panics/hesitates, then sprints/switches to their target door!
+                // 3) 'jump_scramble': player hurdles, leaps/hops, trips and scrambles!
+                // 4) 'crawl': player desperately crawls on hands and knees!
+                // 5) 'normal': hurried rush with sudden sprint bursts!
+                const randVal = Math.random();
                 let behavior = 'normal';
-                if (behaviorRand < 0.25) behavior = 'crawl';
-                else if (behaviorRand < 0.5) behavior = 'fall';
-                else if (behaviorRand < 0.75) behavior = 'fight';
+                if (isEliminated && Math.random() < 0.65) {
+                    behavior = 'pull_out';
+                } else if (randVal < 0.22) {
+                    behavior = 'switch_door';
+                } else if (randVal < 0.44) {
+                    behavior = 'jump_scramble';
+                } else if (randVal < 0.66) {
+                    behavior = 'crawl';
+                } else if (randVal < 0.85) {
+                    behavior = 'pull_out';
+                } else {
+                    behavior = 'normal';
+                }
                 
-                const duration = 5.0 + (Math.random() * 1.0); // Exactly ~5 seconds long
-                
+                const totalDuration = 9.2 + Math.random() * 0.5; // Takes almost the full 10-second countdown window!
+
                 movePromises.push(new Promise<void>(resolve => {
                     const tl = gsap.timeline({ onComplete: () => {
                         char.userData.isMoving = false;
@@ -3625,60 +3670,114 @@ class ThreeManager {
                         resolve();
                     }});
                     
-                    if (behavior === 'crawl') {
+                    if (behavior === 'pull_out') {
+                        // Player enters inside the door room early, then another contestant grapples & pulls them out!
+                        char.userData.behavior = 'fight';
+                        const enteredInsidePos = roomPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2));
+                        const outsideEjectedPos = isEliminated ? finalPos : roomPos.clone().sub(doorDir.clone().multiplyScalar(2.0));
+
+                        // Stage 1: Rush into room
+                        tl.call(() => char.lookAt(enteredInsidePos.x, 1, enteredInsidePos.z));
+                        tl.to(char.position, { x: enteredInsidePos.x, z: enteredInsidePos.z, duration: totalDuration * 0.45, ease: "power1.inOut" });
+                        tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor((totalDuration * 0.45) / 0.2) }, "<");
+
+                        // Stage 2: Struggle inside (arms waving, head shaking, jostling)
+                        tl.to(char.rotation, { y: "+=0.8", duration: 0.2 });
+                        tl.to(char.rotation, { y: "-=1.6", duration: 0.25 });
+                        tl.to(char.position, { y: 0.45, duration: 0.3 }); // tripped down
+                        tl.call(() => {
+                            if (globalAudio) globalAudio.play('bonk', 150);
+                        });
+
+                        // Stage 3: Pulled / dragged backward outside the doorway!
+                        tl.call(() => char.lookAt(enteredInsidePos.x, 0.45, enteredInsidePos.z)); // facing backwards towards door
+                        tl.to(char.position, { 
+                            x: outsideEjectedPos.x, 
+                            z: outsideEjectedPos.z, 
+                            duration: totalDuration * 0.35, 
+                            ease: "power2.out" 
+                        });
+
+                        // Stage 4: If not eliminated, they fight back and crawl back across the threshold at the last second!
+                        if (!isEliminated) {
+                            tl.to(char.position, { y: 1.0, duration: 0.25 });
+                            tl.call(() => char.lookAt(finalPos.x, 1, finalPos.z));
+                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration * 0.2, ease: "power3.out" });
+                            tl.to(char.position, { y: "+=1.4", duration: 0.18, yoyo: true, repeat: 2 }, "<");
+                        } else {
+                            // Laying down, eliminated outside the room
+                            tl.to(char.rotation, { x: Math.PI / 2.1, duration: 0.3 });
+                        }
+
+                    } else if (behavior === 'switch_door') {
+                        // Player changes their mind mid-way: sprints toward one door, hesitates/jumps, then bolts to another!
+                        char.userData.behavior = 'normal';
+                        const decoyMidPos = char.position.clone().lerp(otherRoomPos, 0.65).add(new THREE.Vector3((Math.random() - 0.5) * 4, 0, (Math.random() - 0.5) * 4));
+
+                        // Dash toward decoy door
+                        tl.call(() => char.lookAt(decoyMidPos.x, 1, decoyMidPos.z));
+                        tl.to(char.position, { x: decoyMidPos.x, z: decoyMidPos.z, duration: totalDuration * 0.4, ease: "power2.inOut" });
+                        tl.to(char.position, { y: "+=1.6", duration: 0.18, yoyo: true, repeat: Math.floor((totalDuration * 0.4) / 0.18) }, "<");
+
+                        // Double take / panic jump
+                        tl.to(char.position, { y: "+=2.4", duration: 0.3, yoyo: true, repeat: 1, ease: "power2.out" });
+                        tl.to(char.rotation, { y: "+=3.14", duration: 0.35 }, "<");
+
+                        // Desperate sprint across to final destination door
+                        tl.call(() => char.lookAt(finalPos.x, 1, finalPos.z));
+                        tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration * 0.5, ease: "power1.inOut" });
+                        tl.to(char.position, { y: "+=1.7", duration: 0.17, yoyo: true, repeat: Math.floor((totalDuration * 0.5) / 0.17) }, "<");
+
+                    } else if (behavior === 'jump_scramble') {
+                        // Player leaps, stumbles over others, hurdles forward
+                        char.userData.behavior = 'normal';
+                        const firstThird = char.position.clone().lerp(finalPos, 0.35);
+                        const secondThird = char.position.clone().lerp(finalPos, 0.7);
+
+                        tl.call(() => char.lookAt(firstThird.x, 1, firstThird.z));
+                        tl.to(char.position, { x: firstThird.x, z: firstThird.z, duration: totalDuration * 0.3, ease: "power1.in" });
+                        tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor((totalDuration * 0.3) / 0.2) }, "<");
+
+                        // Huge leaping jump over someone!
+                        tl.to(char.position, { y: "+=3.5", duration: 0.5, ease: "power2.out" });
+                        tl.to(char.position, { x: secondThird.x, z: secondThird.z, duration: 0.5, ease: "none" }, "<");
+                        tl.to(char.position, { y: 0.45, duration: 0.3, ease: "bounce.out" }); // heavy landing trip!
+                        
+                        // Scramble on turf briefly
+                        tl.to(char.rotation, { x: Math.PI / 2.5, duration: 0.2 }, "<");
+                        tl.to({}, { duration: 0.4 }); // scramble pause
+
+                        // Stand up and sprint into room!
+                        if (!isEliminated) {
+                            tl.to(char.rotation, { x: 0, duration: 0.25 });
+                            tl.to(char.position, { y: 1.0, duration: 0.25 }, "<");
+                            tl.call(() => char.lookAt(finalPos.x, 1, finalPos.z));
+                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration * 0.35, ease: "power2.out" });
+                            tl.to(char.position, { y: "+=1.5", duration: 0.18, yoyo: true, repeat: Math.floor((totalDuration * 0.35) / 0.18) }, "<");
+                        } else {
+                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration * 0.35, ease: "none" });
+                        }
+
+                    } else if (behavior === 'crawl') {
+                        // Full desperate crawl on belly & knees toward the door
                         char.userData.behavior = 'crawl';
+                        tl.call(() => char.lookAt(finalPos.x, 1, finalPos.z));
                         tl.to(char.rotation, { x: Math.PI / 2.3, duration: 0.3 });
                         tl.to(char.position, { y: 0.45, duration: 0.3 }, "<");
                         tl.to(char.userData.parts.head.rotation, { x: -0.35, duration: 0.3 }, "<");
-                        tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: duration, ease: "none" });
+                        tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration * 0.85, ease: "none" });
+                        
                         if (!isEliminated) {
                             tl.to(char.rotation, { x: 0, duration: 0.3 });
                             tl.to(char.position, { y: 1.0, duration: 0.3 }, "<");
                             tl.to(char.userData.parts.head.rotation, { x: 0, duration: 0.3 }, "<");
                         }
-                    } else if (behavior === 'fall') {
-                        char.userData.behavior = 'fall';
-                        const midX = (char.position.x + finalPos.x) / 2;
-                        const midZ = (char.position.z + finalPos.z) / 2;
-                        
-                        tl.to(char.position, { x: midX, z: midZ, duration: duration / 3, ease: "power1.inOut" }, 0);
-                        tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor((duration/3) / 0.2) }, 0);
-                        
-                        tl.to(char.rotation, { x: Math.PI / 2.2, duration: 0.2 }, duration/3);
-                        tl.to(char.position, { y: 0.45, duration: 0.2 }, duration/3);
-                        tl.to({}, { duration: 0.5 }); // pause
-                        
-                        if (!isEliminated) {
-                            tl.to(char.rotation, { x: 0, duration: 0.2 });
-                            tl.to(char.position, { y: 1.0, duration: 0.2 }, "<");
-                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: duration / 3, ease: "power1.inOut" });
-                        } else {
-                             tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: duration / 3, ease: "none" });
-                        }
-                    } else if (behavior === 'fight') {
-                        // They run, but occasionally bump violently to the side as if shoved
-                        const midX = (char.position.x + finalPos.x) / 2;
-                        const midZ = (char.position.z + finalPos.z) / 2;
-                        
-                        tl.to(char.position, { x: midX, z: midZ, duration: duration / 2, ease: "power1.inOut" }, 0);
-                        tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor((duration/2) / 0.2) }, 0);
-                        
-                        // The bump (recoil sideways)
-                        const bumpX = midX + (Math.random() - 0.5) * 4;
-                        const bumpZ = midZ + (Math.random() - 0.5) * 4;
-                        tl.to(char.position, { x: bumpX, z: bumpZ, duration: 0.2, ease: "power2.out" }, duration/2);
-                        
-                        // Scramble back up and finish run
-                        if (!isEliminated) {
-                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: (duration / 2) - 0.2, ease: "power1.inOut" });
-                            tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor(((duration/2)-0.2) / 0.2) }, "<");
-                        } else {
-                            tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: (duration / 2) - 0.2, ease: "none" });
-                        }
                     } else {
-                        // Normal run
-                        tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: duration, ease: "power1.inOut" }, 0);
-                        tl.to(char.position, { y: "+=1.5", duration: 0.2, yoyo: true, repeat: Math.floor(duration / 0.2) }, 0);
+                        // Normal rush with realistic mid-run hesitation and final surge
+                        char.userData.behavior = 'normal';
+                        tl.call(() => char.lookAt(finalPos.x, 1, finalPos.z));
+                        tl.to(char.position, { x: finalPos.x, z: finalPos.z, duration: totalDuration, ease: "power1.inOut" }, 0);
+                        tl.to(char.position, { y: "+=1.6", duration: 0.19, yoyo: true, repeat: Math.floor(totalDuration / 0.19) }, 0);
                     }
                 }));
             });
@@ -3686,6 +3785,11 @@ class ThreeManager {
         
         await Promise.all(movePromises);
         isRunning = false; // stop footstep loop
+        if (this.activeDoorCountdownInterval) {
+            clearInterval(this.activeDoorCountdownInterval);
+            this.activeDoorCountdownInterval = null;
+        }
+        this.onStateChange({ chaseSecondsLeft: undefined });
         
         globalAudio.play('pop', 200);
         this.doors.forEach(d => { gsap.to(d.panel.rotation, { y: 0, duration: 0.5 }); });
@@ -4610,12 +4714,12 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                             </div>
                         </div>
                     </div>
-                    {activeGame === 'tag' && gameState.chaseSecondsLeft !== undefined && (
+                    {gameState.chaseSecondsLeft !== undefined && (
                         <div className="bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-2xl border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-4">
                             <div className="text-center">
                                 <div className="text-amber-400 text-xs font-bold tracking-widest mb-1 uppercase flex items-center justify-center gap-1.5">
                                     <Clock className={`w-3.5 h-3.5 ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-400'}`} />
-                                    Chase Timer
+                                    {activeGame === 'tag' ? 'Chase Timer' : 'Door Timer'}
                                 </div>
                                 <div className={`text-4xl font-bold leading-none ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-300'}`} style={{fontFamily: "'Fredoka', sans-serif"}}>
                                     {gameState.chaseSecondsLeft}s
