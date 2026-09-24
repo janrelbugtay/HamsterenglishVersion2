@@ -3574,7 +3574,7 @@ class ThreeManager {
             }
         });
 
-        // 10-second countdown in header HUD
+        // 10-second countdown in header HUD and audio ticks
         let doorSecondsRemaining = 10;
         if (this.activeDoorCountdownInterval) {
             clearInterval(this.activeDoorCountdownInterval);
@@ -3583,6 +3583,13 @@ class ThreeManager {
             doorSecondsRemaining--;
             if (doorSecondsRemaining >= 0) {
                 this.onStateChange({ chaseSecondsLeft: doorSecondsRemaining });
+                if (globalAudio) {
+                    if (doorSecondsRemaining <= 3 && doorSecondsRemaining > 0) {
+                        globalAudio.play('alarm');
+                    } else if (doorSecondsRemaining > 0) {
+                        globalAudio.play('pop', 700 + (10 - doorSecondsRemaining) * 50);
+                    }
+                }
             }
             if (doorSecondsRemaining <= 0) {
                 clearInterval(this.activeDoorCountdownInterval);
@@ -4714,12 +4721,12 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
                             </div>
                         </div>
                     </div>
-                    {gameState.chaseSecondsLeft !== undefined && (
+                    {activeGame === 'tag' && gameState.chaseSecondsLeft !== undefined && (
                         <div className="bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-2xl border-2 border-amber-500/70 shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center gap-4">
                             <div className="text-center">
                                 <div className="text-amber-400 text-xs font-bold tracking-widest mb-1 uppercase flex items-center justify-center gap-1.5">
                                     <Clock className={`w-3.5 h-3.5 ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-400'}`} />
-                                    {activeGame === 'tag' ? 'Chase Timer' : 'Door Timer'}
+                                    Chase Timer
                                 </div>
                                 <div className={`text-4xl font-bold leading-none ${gameState.chaseSecondsLeft <= 5 ? 'text-rose-500 animate-pulse' : 'text-amber-300'}`} style={{fontFamily: "'Fredoka', sans-serif"}}>
                                     {gameState.chaseSecondsLeft}s
@@ -4817,12 +4824,53 @@ export default function SquidGamePicker({ onViewChange }: SquidGamePickerProps) 
             `}} />
 
             {gameState.msg && gameState.phase !== 'WINNER' && (
-                <div className="absolute top-24 left-1/2 transform -translate-x-1/2 w-full text-center pointer-events-none z-30 flex justify-center px-4">
+                <div className="absolute top-24 left-1/2 transform -translate-x-1/2 w-full text-center pointer-events-none z-30 flex flex-col items-center gap-3 px-4">
                     <div className="inline-block bg-slate-900/90 backdrop-blur-md border-b-4 border-rose-600 px-8 py-3 rounded-xl shadow-[0_10px_40px_rgba(244,63,94,0.4)]">
                         <h2 className="text-2xl md:text-4xl text-white tracking-widest uppercase drop-shadow-md font-bold" style={{fontFamily: "'Fredoka', sans-serif"}}>
                             {gameState.msg}
                         </h2>
                     </div>
+
+                    {/* Mingle Door Selection Urgency 10s Countdown Timer Visual */}
+                    {activeGame === 'mingle' && gameState.phase === 'DOORS' && gameState.chaseSecondsLeft !== undefined && (
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-200">
+                            <div className={`flex items-center gap-3 px-6 py-2 rounded-2xl border-2 backdrop-blur-md transition-all duration-300 shadow-2xl ${
+                                gameState.chaseSecondsLeft <= 3 
+                                    ? 'bg-rose-950/90 border-rose-500 text-rose-300 shadow-[0_0_40px_rgba(244,63,94,0.8)] scale-110 animate-bounce' 
+                                    : gameState.chaseSecondsLeft <= 5
+                                    ? 'bg-amber-950/90 border-amber-500 text-amber-300 shadow-[0_0_30px_rgba(245,158,11,0.6)] animate-pulse'
+                                    : 'bg-slate-900/90 border-emerald-500/70 text-emerald-300 shadow-[0_0_25px_rgba(16,185,129,0.4)]'
+                            }`}>
+                                <div className="flex items-center gap-2">
+                                    <Clock className={`w-6 h-6 ${
+                                        gameState.chaseSecondsLeft <= 3 ? 'text-rose-400 animate-spin' : gameState.chaseSecondsLeft <= 5 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
+                                    }`} />
+                                    <span className="text-xs uppercase tracking-widest font-black" style={{fontFamily: "'Fredoka', sans-serif"}}>
+                                        DOORS CLOSING IN
+                                    </span>
+                                </div>
+                                <div className={`text-4xl md:text-5xl font-black font-mono leading-none tracking-tight ${
+                                    gameState.chaseSecondsLeft <= 3 ? 'text-rose-400' : gameState.chaseSecondsLeft <= 5 ? 'text-amber-300' : 'text-emerald-300'
+                                }`}>
+                                    00:0{gameState.chaseSecondsLeft}
+                                </div>
+                            </div>
+
+                            {/* Urgency Progress Bar */}
+                            <div className="w-56 md:w-72 h-2.5 bg-slate-900/80 rounded-full border border-slate-700 overflow-hidden mt-1 p-0.5 shadow-inner">
+                                <div 
+                                    className={`h-full rounded-full transition-all duration-1000 ease-linear ${
+                                        gameState.chaseSecondsLeft <= 3 
+                                            ? 'bg-gradient-to-r from-red-600 to-rose-500' 
+                                            : gameState.chaseSecondsLeft <= 5 
+                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500' 
+                                            : 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                    }`}
+                                    style={{ width: `${Math.max(0, Math.min(100, (gameState.chaseSecondsLeft / 10) * 100))}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
