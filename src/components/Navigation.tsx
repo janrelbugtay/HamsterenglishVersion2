@@ -13,7 +13,8 @@ import {
   X,
   Shield,
   Users,
-  BookOpen
+  BookOpen,
+  Loader2
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
@@ -251,9 +252,10 @@ export function Header({
             <button
               onClick={openAuthModal}
               disabled={isAuthenticating}
-              className="bg-brand-purple hover:bg-brand-purple/90 text-white font-semibold py-1.5 px-3 md:px-4 rounded-full text-sm transition-colors shadow-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-brand-purple hover:bg-brand-purple/90 text-white font-semibold py-1.5 px-3 md:px-4 rounded-full text-sm transition-colors shadow-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
-              {isAuthenticating ? "Signing In..." : "Sign In"}
+              {isAuthenticating && <Loader2 className="animate-spin" size={14} />}
+              <span>{isAuthenticating ? "Signing In..." : "Sign In"}</span>
             </button>
           ))}
       </div>
